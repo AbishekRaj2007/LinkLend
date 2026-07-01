@@ -1,0 +1,57 @@
+Role & Objective: You are an expert frontend engineer building a highly interactive, animated dashboard for "SakshamScore," an MSME Financial Health Card application. I have attached a reference video. Your primary goal is to exactly replicate the visual aesthetic, layout, and animations shown in the video, but adapt the content to fit my FinTech project details.
+
+Tech Stack:
+
+React (Vite)
+
+Tailwind CSS (for styling)
+
+Framer Motion (CRITICAL: use this to replicate the smooth 3D card carousel animations)
+
+Recharts (for data visualization when a card is expanded)
+
+Lucide React (for icons)
+
+Aesthetic & Vibe (Strict Replication of Video):
+
+Background: Deep black/dark theme with very subtle, thin abstract dark-red/orange topographic or network lines in the background.
+
+Typography: The main headline must use an ultra-bold, stretched, stylized, or futuristic font (matching the "REDEFINING CONNECTIONS" text in the video). Subtitles should be a clean, modern sans-serif.
+
+Layout Elements: Top left corner should have the app logo (replace with "SakshamScore" and a sleek icon). Top right should have a small pill-shaped "Approve/Reject" or "Action" button. Keep the floating white "DOWNLOAD REPORT" element with a QR code placeholder on the right edge.
+
+Core Component 1: The Hero & Toggle
+
+Headline: EMPOWERING MSMEs (Styled exactly like the video's main text).
+
+Subtitle: Unified Assessment Framework for NTC/NTB enterprises using alternate data.
+
+Toggle Switch: Below the subtitle, replicate the pill-shaped toggle switch. Instead of "Personal / Business", make it "Assess MSME" / "Portfolio Analytics".
+
+Core Component 2: The 3D MSME Card Carousel (The centerpiece) Replicate the exact horizontal 3D carousel effect from the video.
+
+Animation Mechanics: The center card is largest, opaque, and fully flat. The inactive cards on the left and right are scaled down, pushed to the back (z-index), slightly faded, and perhaps slightly rotated. Include the left/right arrow buttons with small red indicator dots.
+
+Card Visuals: The cards must look like modern bank cards with vibrant, abstract, fluid textures (green zebra stripes, blue waves, etc., exactly like the video).
+
+Card Content (SakshamScore Data): Instead of standard credit card numbers, the cards must display:
+
+Bottom Left: ID: MSME-7892
+
+Bottom Right: Valid: 07/26
+
+Center Large Text (like the card number): SCORE: 72/100
+
+Top Right (like a visa logo): Status: Moderate Risk
+
+Core Component 3: The Expanded "Health Card" View (New addition for project data) The video is minimal, but our project requires dense data.
+
+Interaction: When the user clicks the active, centered MSME card, transition smoothly into an expanded "CardView" dashboard that opens below or overlays beautifully using dark glassmorphism (translucent dark background with border).
+
+Expanded Data (Use this exact mock JSON state for the expanded view):
+
+JSON
+
+{ "msme_id": "MSME-7892", "overall_score": 72, "rating_band": "Moderate Risk", "pillars": [ {"name": "Cashflow Health", "score": 65, "reasons": ["Volatile cashflow in last 3 months", "Strong runway"]} ], "confidence": {"level": "Medium", "raise_by": "One more GST cycle"}, "repayment": {"sustainable_emi": 45000, "basis": "Projected minimum monthly net surplus"}, "flags": {"consistency_alert": true, "detail": "GST turnover significantly exceeds UPI inflows"}, "forecast": {"months": ["Aug", "Sep", "Oct"], "projected_net_surplus": [50000, 52000, 48000]} }
+
+Expanded UI Elements: Inside this glassmorphic panel, render a Score Gauge, a Pillar Breakdown (bars), text alerts for the consistency_alert and confidence levels, and a Recharts line graph for the forecast. Ensure it matches the dark, sleek, high-contrast aesthetic.
