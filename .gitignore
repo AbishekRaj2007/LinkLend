@@ -47,3 +47,6 @@ Thumbs.db
 # Local cache directories
 .cache/
 .local/
+
+# Trained scoring model artifacts (regenerated via scoring/train.ts)
+artifacts/api-server/models/
