@@ -9,11 +9,13 @@
     "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck",
     "dev": "pnpm --parallel --filter @workspace/sakshamscore --filter @workspace/api-server run dev",
     "dev:web": "pnpm --filter @workspace/sakshamscore run dev",
-    "dev:api": "pnpm --filter @workspace/api-server run dev"
+    "dev:api": "pnpm --filter @workspace/api-server run dev",
+    "test": "pnpm -r --if-present run test"
   },
   "private": true,
   "devDependencies": {
     "prettier": "^3.8.4",
-    "typescript": "~5.9.3"
+    "typescript": "~5.9.3",
+    "vitest": "^4.1.9"
   }
 }
