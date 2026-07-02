@@ -205,8 +205,8 @@ export default function Dashboard() {
                 return (
                   <motion.div
                     key={card.id}
-                    className={`absolute w-full h-full rounded-2xl p-6 flex flex-col justify-between cursor-pointer border border-white/10 shadow-2xl ${card.gradient}`}
-                    style={{ zIndex, transformStyle: "preserve-3d" }}
+                    className="absolute w-full h-full rounded-2xl p-6 flex flex-col justify-between cursor-pointer border border-white/10 shadow-2xl"
+                    style={{ ...card.style, zIndex, transformStyle: "preserve-3d" }}
                     initial={false}
                     animate={{
                       scale, opacity, rotateY, x, z,
