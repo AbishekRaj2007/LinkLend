@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Activity, AlertTriangle, ArrowLeft, ArrowRight, ActivitySquare } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Area, AreaChart } from "recharts";
@@ -111,6 +111,14 @@ export default function Dashboard() {
 
   const centerCard = CARDS[activeIndex];
 
+  useEffect(() => {
+    if (isExpanded) return;
+    const timer = setTimeout(() => {
+      setActiveIndex((prev) => (prev + 1) % CARDS.length);
+    }, 4000);
+    return () => clearTimeout(timer);
+  }, [activeIndex, isExpanded]);
+
   return (
     <div className="w-full min-h-screen pb-20">
       {/* Navigation */}
@@ -127,16 +135,17 @@ export default function Dashboard() {
       </nav>
 
       {/* Floating Download Report */}
-      <div className="fixed right-6 top-1/2 -translate-y-1/2 z-40 bg-white text-black p-4 rounded-xl shadow-2xl flex flex-col items-center gap-4 hidden md:flex">
-        <div className="font-bebas text-xl [writing-mode:vertical-lr] rotate-180 tracking-widest">
-          DOWNLOAD REPORT
-        </div>
-        <div className="w-12 h-12 bg-black/10 rounded grid grid-cols-3 grid-rows-3 gap-0.5 p-1">
+      <button
+        type="button"
+        className="fixed right-6 top-1/2 -translate-y-1/2 z-40 bg-white text-black pl-4 pr-2 py-2 rounded-full shadow-2xl hidden md:flex items-center gap-2 hover:bg-white/90 transition-colors"
+      >
+        <span className="font-bebas text-sm tracking-widest">DOWNLOAD REPORT</span>
+        <div className="w-7 h-7 shrink-0 bg-black/10 rounded grid grid-cols-3 grid-rows-3 gap-px p-1">
           {[...Array(9)].map((_, i) => (
             <div key={i} className={`bg-black ${i % 2 === 0 ? 'opacity-100' : 'opacity-20'}`} />
           ))}
         </div>
-      </div>
+      </button>
 
       <main className="pt-32 px-6 max-w-6xl mx-auto flex flex-col items-center">
         {/* Hero Section */}
@@ -163,17 +172,29 @@ export default function Dashboard() {
                 Portfolio Analytics
               </button>
             </div>
-            <motion.div 
+            <motion.div
               className="absolute top-1 bottom-1 w-1/2 bg-white rounded-full z-0"
               initial={false}
               animate={{ left: activeTab === "assess" ? "4px" : "calc(50% - 4px)" }}
               transition={{ type: "spring", stiffness: 400, damping: 30 }}
             />
           </div>
+
+          <div className="mt-6">
+            <motion.button
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
+              onClick={() => setIsExpanded(true)}
+              className="inline-flex items-center gap-2 bg-primary hover:bg-primary/90 text-white px-8 py-3 rounded-full text-sm font-semibold tracking-wide transition-colors shadow-lg shadow-primary/20"
+            >
+              Get Started
+              <ArrowRight className="w-4 h-4" />
+            </motion.button>
+          </div>
         </div>
 
         {/* Carousel */}
-        <div className="relative w-full max-w-4xl h-[320px] flex items-center justify-center perspective-[1000px] mb-12">
+        <div className="relative w-full max-w-4xl h-[320px] flex items-center justify-center perspective-[1000px] mt-6 mb-12">
           <div className="absolute left-0 z-20">
             <button onClick={prevCard} className="p-3 rounded-full bg-white/5 border border-white/10 text-white hover:bg-white/10 transition-colors">
               <ArrowLeft className="w-5 h-5" />
