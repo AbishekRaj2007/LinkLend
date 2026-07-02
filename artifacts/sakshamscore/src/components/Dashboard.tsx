@@ -48,7 +48,7 @@ const MOCK_DATA = {
   ]
 };
 
-function GaugeArc({ score }: { score: number }) {
+export function GaugeArc({ score }: { score: number }) {
   const radius = 60;
   const circumference = Math.PI * radius;
   const strokeDashoffset = circumference - (score / 100) * circumference;
@@ -94,7 +94,7 @@ function GaugeArc({ score }: { score: number }) {
   );
 }
 
-export default function Dashboard() {
+export default function Dashboard({ onGetStarted }: { onGetStarted?: () => void }) {
   const [activeIndex, setActiveIndex] = useState(0);
   const [isExpanded, setIsExpanded] = useState(false);
   const [activeTab, setActiveTab] = useState<"assess" | "portfolio">("assess");
@@ -184,7 +184,7 @@ export default function Dashboard() {
             <motion.button
               whileHover={{ scale: 1.03 }}
               whileTap={{ scale: 0.97 }}
-              onClick={() => setIsExpanded(true)}
+              onClick={onGetStarted}
               className="inline-flex items-center gap-2 bg-primary hover:bg-primary/90 text-white px-8 py-3 rounded-full text-sm font-semibold tracking-wide transition-colors shadow-lg shadow-primary/20"
             >
               Get Started
