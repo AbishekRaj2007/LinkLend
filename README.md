@@ -4,7 +4,10 @@ _Replace the heading above with the project's name, and this line with one sente
 
 ## Run & Operate
 
-- `pnpm --filter @workspace/api-server run dev` — run the API server (port 5000)
+- `pnpm install` — install all workspace dependencies
+- `pnpm run dev` — run the frontend (port 5173) and API server (port 5000) together
+- `pnpm run dev:web` — run only the frontend (`sakshamscore`)
+- `pnpm run dev:api` — run only the API server
 - `pnpm run typecheck` — full typecheck across all packages
 - `pnpm run build` — typecheck + build all packages
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
