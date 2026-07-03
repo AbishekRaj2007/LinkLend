@@ -5,6 +5,11 @@ import { scoreMsme } from "./score";
 import { reasonCodes } from "./explain";
 import { mapCompletenessToConfidence } from "./confidence";
 import { sustainableEmi } from "./repayment";
+import {
+  forecastScore,
+  DEFAULT_BASE_MONTH,
+  type FeatureSnapshot,
+} from "./forecast";
 
 export type { ModelBundle, PillarModel } from "./train";
 export { trainModels, getModels, saveModels } from "./train";
@@ -12,10 +17,11 @@ export { scoreMsme, ratingBand } from "./score";
 export { reasonCodes, overallReason } from "./explain";
 export { mapCompletenessToConfidence } from "./confidence";
 export { sustainableEmi } from "./repayment";
+export { forecastScore } from "./forecast";
+export type { FeatureSnapshot, Forecast } from "./forecast";
 
 /**
  * Full scorecard — this is the API contract (field names are exact).
- * The `forecast` field is added in Gate 4 and intentionally omitted here.
  */
 export interface Card {
   msme_id: string;
@@ -25,6 +31,7 @@ export interface Card {
   confidence: { level: string; raise_by: string };
   repayment: { sustainable_emi: number; basis: string };
   flags: { consistency_alert: boolean; detail: string };
+  forecast: { months: string[]; projected_net_surplus: number[] };
 }
 
 // Below this, a cross-source consistency ratio (~1.0 = corroborated) is treated
@@ -58,8 +65,18 @@ function consistencyFlag(f: FeatureRecord): {
   };
 }
 
-/** Assemble the full scorecard for one MSME from its feature record. */
-export function assembleCard(msmeId: string, f: FeatureRecord): Card {
+/**
+ * Assemble the full scorecard for one MSME from its feature record.
+ *
+ * `history` is the MSME's monthly net-inflow series, used only for the forward
+ * projection. When it is omitted (or empty) the forecast falls back to a flat
+ * projection off the current average, so the card shape is always complete.
+ */
+export function assembleCard(
+  msmeId: string,
+  f: FeatureRecord,
+  history: FeatureSnapshot[] = [],
+): Card {
   const models = getModels();
   const scored = scoreMsme(f, models);
 
@@ -72,6 +89,12 @@ export function assembleCard(msmeId: string, f: FeatureRecord): Card {
   const confidence = mapCompletenessToConfidence(f.completeness);
   const repayment = sustainableEmi(f);
   const flags = consistencyFlag(f);
+  const forecast = forecastScore(
+    msmeId,
+    history.length
+      ? history
+      : [{ month: DEFAULT_BASE_MONTH, avgMonthlyNetInflow: f.avgMonthlyNetInflow }],
+  );
 
   return {
     msme_id: msmeId,
@@ -84,5 +107,6 @@ export function assembleCard(msmeId: string, f: FeatureRecord): Card {
       basis: repayment.basis,
     },
     flags,
+    forecast,
   };
 }
