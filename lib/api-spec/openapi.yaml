@@ -10,6 +10,8 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: scoring
+    description: MSME assessment, scorecard, and portfolio operations
 paths:
   /healthz:
     get:
@@ -24,6 +26,69 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /assess:
+    post:
+      operationId: assess
+      tags: [scoring]
+      summary: Assess an MSME
+      description: Compute the full scorecard for one MSME and cache the result.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AssessRequest"
+      responses:
+        "200":
+          description: The full scorecard
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CardResponse"
+        "404":
+          description: Unknown MSME
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /card/{msme_id}:
+    get:
+      operationId: getCard
+      tags: [scoring]
+      summary: Get a cached scorecard
+      description: Return the most recently assessed scorecard for an MSME.
+      parameters:
+        - name: msme_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The cached scorecard
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CardResponse"
+        "404":
+          description: No cached scorecard for this MSME
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /portfolio:
+    get:
+      operationId: getPortfolio
+      tags: [scoring]
+      summary: Portfolio analytics
+      description: Aggregate score distribution, sector concentration, and expected default across all MSMEs.
+      responses:
+        "200":
+          description: Portfolio analytics
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PortfolioResponse"
 components:
   schemas:
     HealthStatus:
@@ -33,4 +98,146 @@ components:
           type: string
       required:
         - status
-
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
+    AssessRequest:
+      type: object
+      properties:
+        msme_id:
+          type: string
+      required:
+        - msme_id
+    Pillar:
+      type: object
+      properties:
+        name:
+          type: string
+        score:
+          type: number
+        reasons:
+          type: array
+          items:
+            type: string
+      required:
+        - name
+        - score
+        - reasons
+    Confidence:
+      type: object
+      properties:
+        level:
+          type: string
+        raise_by:
+          type: string
+      required:
+        - level
+        - raise_by
+    Repayment:
+      type: object
+      properties:
+        sustainable_emi:
+          type: number
+        basis:
+          type: string
+      required:
+        - sustainable_emi
+        - basis
+    Flags:
+      type: object
+      properties:
+        consistency_alert:
+          type: boolean
+        detail:
+          type: string
+      required:
+        - consistency_alert
+        - detail
+    Forecast:
+      type: object
+      properties:
+        months:
+          type: array
+          items:
+            type: string
+        projected_net_surplus:
+          type: array
+          items:
+            type: number
+      required:
+        - months
+        - projected_net_surplus
+    CardResponse:
+      type: object
+      properties:
+        msme_id:
+          type: string
+        overall_score:
+          type: number
+        rating_band:
+          type: string
+        pillars:
+          type: array
+          items:
+            $ref: "#/components/schemas/Pillar"
+        confidence:
+          $ref: "#/components/schemas/Confidence"
+        repayment:
+          $ref: "#/components/schemas/Repayment"
+        flags:
+          $ref: "#/components/schemas/Flags"
+        forecast:
+          $ref: "#/components/schemas/Forecast"
+      required:
+        - msme_id
+        - overall_score
+        - rating_band
+        - pillars
+        - confidence
+        - repayment
+        - flags
+        - forecast
+    ScoreBucket:
+      type: object
+      properties:
+        bucket:
+          type: string
+        count:
+          type: integer
+      required:
+        - bucket
+        - count
+    SectorConcentration:
+      type: object
+      properties:
+        sector:
+          type: string
+        count:
+          type: integer
+        avgScore:
+          type: number
+      required:
+        - sector
+        - count
+        - avgScore
+    PortfolioResponse:
+      type: object
+      properties:
+        scoreDistribution:
+          type: array
+          items:
+            $ref: "#/components/schemas/ScoreBucket"
+        sectorConcentration:
+          type: array
+          items:
+            $ref: "#/components/schemas/SectorConcentration"
+        expectedDefaultEstimate:
+          type: number
+      required:
+        - scoreDistribution
+        - sectorConcentration
+        - expectedDefaultEstimate

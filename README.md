@@ -29,7 +29,7 @@ _Populate as you build — short repo map plus pointers to the source-of-truth f
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- The API currently reads the seeded in-memory generator (`generateDataset`, via `artifacts/api-server/src/data/store.ts`) rather than querying Postgres. `/assess`, `/card`, and `/portfolio` are all served from this in-memory dataset, pinned to the same seed/count the scoring models were trained on. DB-backed reads via `@workspace/db` are deferred to a dedicated later gate before deploy; the read path is isolated in `store.ts` to make that swap non-invasive.
 
 ## Product
 
