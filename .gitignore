@@ -50,3 +50,4 @@ Thumbs.db
 
 # Trained scoring model artifacts (regenerated via scoring/train.ts)
 artifacts/api-server/models/
+.env
