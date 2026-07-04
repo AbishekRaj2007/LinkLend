@@ -1,10 +1,11 @@
 import { Router, type IRouter } from "express";
 import { GetCardResponse } from "@workspace/api-zod";
 import { getCachedCard } from "../data/store";
+import { requireAuth, requireRole } from "../middlewares/requireAuth";
 
 const router: IRouter = Router();
 
-router.get("/card/:msme_id", (req, res) => {
+router.get<{ msme_id: string }>("/card/:msme_id", requireAuth, requireRole("lender"), (req, res) => {
   const card = getCachedCard(req.params.msme_id);
   if (!card) {
     res

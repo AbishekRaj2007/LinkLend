@@ -71,15 +71,33 @@ export interface PortfolioResponse {
   expectedDefaultEstimate: number;
 }
 
+export type UserRole = typeof UserRole[keyof typeof UserRole];
+
+
+export const UserRole = {
+  lender: 'lender',
+  borrower: 'borrower',
+} as const;
+
 export interface User {
   id: number;
   email: string;
   name: string;
+  role: UserRole;
+  msme_id?: string;
 }
 
 export interface AuthResponse {
   user: User;
 }
+
+export type SignupRequestRole = typeof SignupRequestRole[keyof typeof SignupRequestRole];
+
+
+export const SignupRequestRole = {
+  lender: 'lender',
+  borrower: 'borrower',
+} as const;
 
 export interface SignupRequest {
   email: string;
@@ -87,6 +105,8 @@ export interface SignupRequest {
   password: string;
   /** @minLength 1 */
   name: string;
+  role: SignupRequestRole;
+  msme_id?: string;
 }
 
 export interface LoginRequest {

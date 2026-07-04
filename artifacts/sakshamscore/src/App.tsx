@@ -1,6 +1,7 @@
 import { Switch, Route, Redirect, useLocation } from "wouter";
 import Dashboard from "./components/Dashboard";
 import AssessmentView from "./components/AssessmentView";
+import BorrowerDashboard from "./components/BorrowerDashboard";
 import { type Page } from "./components/Sidebar";
 import SignUp from "./pages/SignUp";
 import Login from "./pages/Login";
@@ -22,12 +23,20 @@ function AssessmentRoute({ params }: { params: { page: string } }) {
   const page = isPage(params.page) ? params.page : "assess";
 
   return (
-    <ProtectedRoute>
+    <ProtectedRoute requiredRole="lender">
       <AssessmentView
         page={page}
         onNavigate={(next) => setLocation(`/app/${next}`)}
         onBack={() => setLocation("/")}
       />
+    </ProtectedRoute>
+  );
+}
+
+function BorrowerRoute() {
+  return (
+    <ProtectedRoute requiredRole="borrower">
+      <BorrowerDashboard />
     </ProtectedRoute>
   );
 }
@@ -43,6 +52,7 @@ function App() {
         <Route path="/app">
           <Redirect to="/app/assess" />
         </Route>
+        <Route path="/borrower" component={BorrowerRoute} />
         <Route>
           <Redirect to="/" />
         </Route>

@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll } from "vitest";
+import jwt from "jsonwebtoken";
 import {
   signAccessToken,
   verifyAccessToken,
@@ -11,22 +12,44 @@ beforeAll(() => {
 });
 
 describe("access tokens", () => {
-  it("round-trips a userId through sign/verify", () => {
-    const token = signAccessToken(42);
-    expect(verifyAccessToken(token)).toEqual({ userId: 42 });
+  it("round-trips a lender's userId/role/msmeId through sign/verify", () => {
+    const token = signAccessToken(42, "lender", null);
+    expect(verifyAccessToken(token)).toEqual({
+      userId: 42,
+      role: "lender",
+      msmeId: null,
+    });
+  });
+
+  it("round-trips a borrower's linked msmeId through sign/verify", () => {
+    const token = signAccessToken(7, "borrower", "MSME-000001");
+    expect(verifyAccessToken(token)).toEqual({
+      userId: 7,
+      role: "borrower",
+      msmeId: "MSME-000001",
+    });
   });
 
   it("rejects a tampered token", () => {
-    const token = signAccessToken(42);
+    const token = signAccessToken(42, "lender", null);
     expect(verifyAccessToken(token + "tampered")).toBeNull();
   });
 
   it("rejects a token signed with a different secret", () => {
-    const token = signAccessToken(42);
+    const token = signAccessToken(42, "lender", null);
     const original = process.env.JWT_ACCESS_SECRET;
     process.env.JWT_ACCESS_SECRET = "a-different-secret";
     expect(verifyAccessToken(token)).toBeNull();
     process.env.JWT_ACCESS_SECRET = original;
+  });
+
+  it("rejects a token with an invalid role claim", () => {
+    const bogus = jwt.sign(
+      { userId: 42, role: "admin", msmeId: null },
+      process.env.JWT_ACCESS_SECRET!,
+      { algorithm: "HS256", expiresIn: 900 },
+    );
+    expect(verifyAccessToken(bogus)).toBeNull();
   });
 });
 

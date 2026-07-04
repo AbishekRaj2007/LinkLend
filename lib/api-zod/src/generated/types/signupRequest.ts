@@ -5,6 +5,7 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { SignupRequestRole } from './signupRequestRole';
 
 export interface SignupRequest {
   email: string;
@@ -12,4 +13,6 @@ export interface SignupRequest {
   password: string;
   /** @minLength 1 */
   name: string;
+  role: SignupRequestRole;
+  msme_id?: string;
 }

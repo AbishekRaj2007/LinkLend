@@ -104,7 +104,15 @@ describe("schema tables", () => {
     {
       name: "users",
       table: users,
-      columns: ["id", "email", "passwordHash", "name", "createdAt"],
+      columns: [
+        "id",
+        "email",
+        "passwordHash",
+        "name",
+        "role",
+        "msmeId",
+        "createdAt",
+      ],
     },
     {
       name: "refresh_tokens",
@@ -226,11 +234,32 @@ describe("insert schemas", () => {
       email: "analyst@example.com",
       passwordHash: "$2b$12$abcdefghijklmnopqrstuv",
       name: "Priya Nair",
+      role: "lender",
     };
     expect(insertUserSchema.parse(valid)).toEqual(valid);
 
     const { email: _omit, ...missing } = valid;
     expect(insertUserSchema.safeParse(missing).success).toBe(false);
+  });
+
+  it("insertUserSchema allows role to be omitted, falling back to the column default", () => {
+    const valid = {
+      email: "no-role@example.com",
+      passwordHash: "$2b$12$abcdefghijklmnopqrstuv",
+      name: "No Role",
+    };
+    expect(insertUserSchema.safeParse(valid).success).toBe(true);
+  });
+
+  it("insertUserSchema parses a borrower row with a linked msmeId", () => {
+    const valid = {
+      email: "borrower@example.com",
+      passwordHash: "$2b$12$abcdefghijklmnopqrstuv",
+      name: "Priya Nair",
+      role: "borrower",
+      msmeId: "MSME-000001",
+    };
+    expect(insertUserSchema.parse(valid)).toEqual(valid);
   });
 
   it("insertRefreshTokenSchema parses a valid row and rejects a missing required field", () => {

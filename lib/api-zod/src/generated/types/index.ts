@@ -21,4 +21,6 @@ export * from './repayment';
 export * from './scoreBucket';
 export * from './sectorConcentration';
 export * from './signupRequest';
+export * from './signupRequestRole';
 export * from './user';
+export * from './userRole';

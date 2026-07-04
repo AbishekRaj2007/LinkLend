@@ -47,6 +47,18 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/CardResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Authenticated user is not a lender
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "404":
           description: Unknown MSME
           content:
@@ -72,6 +84,18 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/CardResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Authenticated user is not a lender
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
         "404":
           description: No cached scorecard for this MSME
           content:
@@ -91,6 +115,49 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PortfolioResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Authenticated user is not a lender
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /me/scorecard:
+    get:
+      operationId: getMyScorecard
+      tags: [scoring]
+      summary: Get my own scorecard
+      description: Returns the scorecard for the MSME linked to the authenticated borrower.
+      responses:
+        "200":
+          description: The scorecard for the authenticated borrower's linked MSME
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CardResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Authenticated user is not a borrower
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: No MSME linked to this account, or the linked MSME is unknown
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /auth/signup:
     post:
       operationId: signup
@@ -356,10 +423,16 @@ components:
           format: email
         name:
           type: string
+        role:
+          type: string
+          enum: [lender, borrower]
+        msme_id:
+          type: string
       required:
         - id
         - email
         - name
+        - role
     AuthResponse:
       type: object
       properties:
@@ -379,10 +452,16 @@ components:
         name:
           type: string
           minLength: 1
+        role:
+          type: string
+          enum: [lender, borrower]
+        msme_id:
+          type: string
       required:
         - email
         - password
         - name
+        - role
     LoginRequest:
       type: object
       properties:

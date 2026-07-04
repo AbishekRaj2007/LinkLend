@@ -7,9 +7,11 @@ import { Label } from "../components/ui/label";
 import { Checkbox } from "../components/ui/checkbox";
 import { extractErrorMessage } from "../lib/errors";
 import AuthLayout from "../components/AuthLayout";
+import RoleToggle, { type AuthRole } from "../components/RoleToggle";
 
 export default function Login() {
   const [, setLocation] = useLocation();
+  const [role, setRole] = useState<AuthRole>("lender");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(false);
@@ -19,7 +21,14 @@ export default function Login() {
     e.preventDefault();
     login.mutate(
       { data: { email, password } },
-      { onSuccess: () => setLocation("/app/assess") },
+      {
+        // Route by the response's actual role, not the tab, so a correct
+        // login always lands on the real dashboard even if the wrong tab
+        // was clicked.
+        onSuccess: (data) => {
+          setLocation(data.user.role === "borrower" ? "/borrower" : "/app/assess");
+        },
+      },
     );
   };
 
@@ -34,6 +43,8 @@ export default function Login() {
         Enter your credentials to access your account
       </p>
 
+      <RoleToggle value={role} onChange={setRole} />
+
       <form onSubmit={handleSubmit} className="space-y-5">
         <div className="space-y-1.5">
           <Label htmlFor="email" className="text-white/70">
@@ -45,7 +56,7 @@ export default function Login() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
-            placeholder="you@bank.com"
+            placeholder={role === "borrower" ? "you@business.com" : "you@bank.com"}
             autoComplete="email"
             className="h-11 bg-white/5 border-white/10"
           />

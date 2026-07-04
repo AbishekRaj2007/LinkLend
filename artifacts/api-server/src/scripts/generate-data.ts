@@ -6,19 +6,14 @@
  * transactions, epfo, obligations). Every observable signal is a noisy
  * function of latent_health, so a downstream model can (later) recover it.
  *
- * The core (`generateDataset`) is a pure, seeded function returning in-memory
- * rows — this is what the tests exercise, so runs are fully reproducible and
- * no live database is required. `main()` is the dev-only script path that
- * truncates the five tables and bulk-inserts a fresh dataset via Drizzle.
+ * Pure, seeded, and side-effect-free — this is what the runtime server and
+ * tests both import. The dev-only DB-seeding script lives separately in
+ * seed-db.ts (never imported here, and never imported by runtime server
+ * code) precisely so this module can be safely bundled into the server
+ * without risk of an accidental DB write on startup.
  */
 
-import { pathToFileURL } from "node:url";
 import {
-  msmeMaster,
-  gstReturns,
-  transactions,
-  epfo,
-  obligations,
   type InsertMsmeMaster,
   type InsertGstReturns,
   type InsertTransactions,
@@ -452,61 +447,4 @@ export function generateDataset(opts: GenerateOptions = {}): Dataset {
   }
 
   return ds;
-}
-
-// ---------------------------------------------------------------------------
-// Dev-only script entrypoint: truncate + bulk insert via Drizzle.
-// ---------------------------------------------------------------------------
-async function insertChunked<T>(
-  rows: T[],
-  insert: (chunk: T[]) => Promise<unknown>,
-  chunkSize = 1000,
-): Promise<void> {
-  for (let i = 0; i < rows.length; i += chunkSize) {
-    await insert(rows.slice(i, i + chunkSize));
-  }
-}
-
-export async function main(): Promise<void> {
-  if (process.env.NODE_ENV === "production") {
-    throw new Error("generate-data is a dev-only script; refusing to run in production");
-  }
-
-  // Imported lazily so the module has no side effects when required by tests
-  // (importing @workspace/db eagerly requires DATABASE_URL to be set).
-  const { db, pool } = await import("@workspace/db");
-  const { sql } = await import("drizzle-orm");
-
-  const ds = generateDataset();
-
-  await db.execute(
-    sql`TRUNCATE TABLE ${msmeMaster}, ${gstReturns}, ${transactions}, ${epfo}, ${obligations} RESTART IDENTITY CASCADE`,
-  );
-
-  await insertChunked(ds.msmeMaster, (c) => db.insert(msmeMaster).values(c));
-  await insertChunked(ds.gstReturns, (c) => db.insert(gstReturns).values(c));
-  await insertChunked(ds.transactions, (c) => db.insert(transactions).values(c));
-  await insertChunked(ds.epfo, (c) => db.insert(epfo).values(c));
-  await insertChunked(ds.obligations, (c) => db.insert(obligations).values(c));
-
-  // eslint-disable-next-line no-console
-  console.log(
-    `Inserted ${ds.msmeMaster.length} MSMEs: ` +
-      `${ds.gstReturns.length} gst_returns, ${ds.transactions.length} transactions, ` +
-      `${ds.epfo.length} epfo, ${ds.obligations.length} obligations`,
-  );
-
-  await pool.end();
-}
-
-// Run only when invoked directly (e.g. `tsx generate-data.ts`), never on import.
-const invokedDirectly = process.argv[1]
-  ? import.meta.url === pathToFileURL(process.argv[1]).href
-  : false;
-if (invokedDirectly) {
-  main().catch((err) => {
-    // eslint-disable-next-line no-console
-    console.error(err);
-    process.exit(1);
-  });
 }

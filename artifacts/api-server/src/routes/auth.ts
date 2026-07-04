@@ -17,8 +17,10 @@ import {
   hashRefreshToken,
   ACCESS_TOKEN_TTL_SECONDS,
   REFRESH_TOKEN_TTL_MS,
+  type UserRole,
 } from "../lib/tokens";
 import { requireAuth } from "../middlewares/requireAuth";
+import { getRaw } from "../data/store";
 
 const router: IRouter = Router();
 
@@ -34,6 +36,22 @@ const authRateLimiter = rateLimit({
 
 function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
+}
+
+function toUserPayload(user: {
+  id: number;
+  email: string;
+  name: string;
+  role: string;
+  msmeId: string | null;
+}) {
+  return {
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    role: user.role as UserRole,
+    msme_id: user.msmeId ?? undefined,
+  };
 }
 
 function setAuthCookies(
@@ -65,13 +83,13 @@ function clearAuthCookies(res: Response): void {
 
 async function issueSession(
   res: Response,
-  userId: number,
+  user: { id: number; role: UserRole; msmeId: string | null },
 ): Promise<void> {
-  const accessToken = signAccessToken(userId);
+  const accessToken = signAccessToken(user.id, user.role, user.msmeId);
   const refresh = generateRefreshToken();
 
   await db.insert(refreshTokens).values({
-    userId,
+    userId: user.id,
     tokenHash: refresh.tokenHash,
     expiresAt: refresh.expiresAt,
   });
@@ -89,7 +107,23 @@ router.post("/auth/signup", authRateLimiter, async (req, res) => {
   }
 
   const email = normalizeEmail(parsed.data.email);
-  const { password, name } = parsed.data;
+  const { password, name, role } = parsed.data;
+
+  let msmeId: string | null = null;
+  if (role === "borrower") {
+    const candidateId = parsed.data.msme_id?.trim().toUpperCase();
+    if (!candidateId) {
+      res
+        .status(400)
+        .json({ message: "msme_id is required for borrower accounts" });
+      return;
+    }
+    if (!getRaw(candidateId)) {
+      res.status(400).json({ message: `Unknown MSME: ${candidateId}` });
+      return;
+    }
+    msmeId = candidateId;
+  }
 
   const existing = await db
     .select({ id: users.id })
@@ -106,18 +140,12 @@ router.post("/auth/signup", authRateLimiter, async (req, res) => {
   const passwordHash = await hashPassword(password);
   const [user] = await db
     .insert(users)
-    .values({ email, passwordHash, name })
+    .values({ email, passwordHash, name, role, msmeId })
     .returning();
 
-  await issueSession(res, user.id);
+  await issueSession(res, { id: user.id, role, msmeId });
 
-  res
-    .status(201)
-    .json(
-      SignupResponse.parse({
-        user: { id: user.id, email: user.email, name: user.name },
-      }),
-    );
+  res.status(201).json(SignupResponse.parse({ user: toUserPayload(user) }));
 });
 
 router.post("/auth/login", authRateLimiter, async (req, res) => {
@@ -143,13 +171,13 @@ router.post("/auth/login", authRateLimiter, async (req, res) => {
     return;
   }
 
-  await issueSession(res, user.id);
+  await issueSession(res, {
+    id: user.id,
+    role: user.role as UserRole,
+    msmeId: user.msmeId,
+  });
 
-  res.json(
-    LoginResponse.parse({
-      user: { id: user.id, email: user.email, name: user.name },
-    }),
-  );
+  res.json(LoginResponse.parse({ user: toUserPayload(user) }));
 });
 
 router.post("/auth/refresh", async (req, res) => {
@@ -195,13 +223,13 @@ router.post("/auth/refresh", async (req, res) => {
     return;
   }
 
-  await issueSession(res, user.id);
+  await issueSession(res, {
+    id: user.id,
+    role: user.role as UserRole,
+    msmeId: user.msmeId,
+  });
 
-  res.json(
-    RefreshResponse.parse({
-      user: { id: user.id, email: user.email, name: user.name },
-    }),
-  );
+  res.json(RefreshResponse.parse({ user: toUserPayload(user) }));
 });
 
 router.post("/auth/logout", async (req, res) => {
@@ -230,11 +258,7 @@ router.get("/auth/me", requireAuth, async (req, res) => {
     return;
   }
 
-  res.json(
-    MeResponse.parse({
-      user: { id: user.id, email: user.email, name: user.name },
-    }),
-  );
+  res.json(MeResponse.parse({ user: toUserPayload(user) }));
 });
 
 export default router;

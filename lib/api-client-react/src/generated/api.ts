@@ -318,7 +318,7 @@ export const getGetPortfolioQueryKey = () => {
     }
 
 
-export const getGetPortfolioQueryOptions = <TData = Awaited<ReturnType<typeof getPortfolio>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPortfolio>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getGetPortfolioQueryOptions = <TData = Awaited<ReturnType<typeof getPortfolio>>, TError = ErrorType<ErrorResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPortfolio>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
@@ -337,19 +337,97 @@ const {query: queryOptions, request: requestOptions} = options ?? {};
 }
 
 export type GetPortfolioQueryResult = NonNullable<Awaited<ReturnType<typeof getPortfolio>>>
-export type GetPortfolioQueryError = ErrorType<unknown>
+export type GetPortfolioQueryError = ErrorType<ErrorResponse>
 
 
 /**
  * @summary Portfolio analytics
  */
 
-export function useGetPortfolio<TData = Awaited<ReturnType<typeof getPortfolio>>, TError = ErrorType<unknown>>(
+export function useGetPortfolio<TData = Awaited<ReturnType<typeof getPortfolio>>, TError = ErrorType<ErrorResponse>>(
   options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPortfolio>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetPortfolioQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetMyScorecardUrl = () => {
+
+
+
+
+  return `/api/me/scorecard`
+}
+
+/**
+ * Returns the scorecard for the MSME linked to the authenticated borrower.
+ * @summary Get my own scorecard
+ */
+export const getMyScorecard = async ( options?: RequestInit): Promise<CardResponse> => {
+
+  return customFetch<CardResponse>(getGetMyScorecardUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetMyScorecardQueryKey = () => {
+    return [
+    `/api/me/scorecard`
+    ] as const;
+    }
+
+
+export const getGetMyScorecardQueryOptions = <TData = Awaited<ReturnType<typeof getMyScorecard>>, TError = ErrorType<ErrorResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMyScorecard>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetMyScorecardQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getMyScorecard>>> = ({ signal }) => getMyScorecard({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getMyScorecard>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetMyScorecardQueryResult = NonNullable<Awaited<ReturnType<typeof getMyScorecard>>>
+export type GetMyScorecardQueryError = ErrorType<ErrorResponse>
+
+
+/**
+ * @summary Get my own scorecard
+ */
+
+export function useGetMyScorecard<TData = Awaited<ReturnType<typeof getMyScorecard>>, TError = ErrorType<ErrorResponse>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMyScorecard>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetMyScorecardQueryOptions(options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

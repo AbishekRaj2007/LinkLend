@@ -19,12 +19,25 @@ function getAccessTokenSecret(): string {
   return secret;
 }
 
+export type UserRole = "lender" | "borrower";
+
 export interface AccessTokenPayload {
   userId: number;
+  role: UserRole;
+  // fk-by-value to msme_master.msme_id; null for lenders, set for borrowers.
+  msmeId: string | null;
 }
 
-export function signAccessToken(userId: number): string {
-  const payload: AccessTokenPayload = { userId };
+// role/msmeId are embedded in the token and never re-checked against the DB
+// per request — safe today because nothing can change a user's role after
+// signup; if an admin role-change feature is ever added, either shorten
+// ACCESS_TOKEN_TTL_SECONDS further or add a revocation check in requireAuth.
+export function signAccessToken(
+  userId: number,
+  role: UserRole,
+  msmeId: string | null,
+): string {
+  const payload: AccessTokenPayload = { userId, role, msmeId };
   return jwt.sign(payload, getAccessTokenSecret(), {
     algorithm: "HS256",
     expiresIn: ACCESS_TOKEN_TTL_SECONDS,
@@ -35,9 +48,14 @@ export function verifyAccessToken(token: string): AccessTokenPayload | null {
   try {
     const decoded = jwt.verify(token, getAccessTokenSecret(), {
       algorithms: ["HS256"],
-    });
-    const userId = (decoded as Record<string, unknown>)?.userId;
-    return typeof userId === "number" ? { userId } : null;
+    }) as Record<string, unknown>;
+
+    const { userId, role, msmeId } = decoded;
+    if (typeof userId !== "number") return null;
+    if (role !== "lender" && role !== "borrower") return null;
+    if (typeof msmeId !== "string" && msmeId !== null) return null;
+
+    return { userId, role, msmeId };
   } catch {
     return null;
   }

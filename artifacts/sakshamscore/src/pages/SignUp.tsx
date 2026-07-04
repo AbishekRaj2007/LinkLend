@@ -6,19 +6,34 @@ import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { extractErrorMessage } from "../lib/errors";
 import AuthLayout from "../components/AuthLayout";
+import RoleToggle, { type AuthRole } from "../components/RoleToggle";
 
 export default function SignUp() {
   const [, setLocation] = useLocation();
+  const [role, setRole] = useState<AuthRole>("lender");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [msmeId, setMsmeId] = useState("");
   const signup = useSignup();
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     signup.mutate(
-      { data: { name, email, password } },
-      { onSuccess: () => setLocation("/app/assess") },
+      {
+        data: {
+          name,
+          email,
+          password,
+          role,
+          ...(role === "borrower" ? { msme_id: msmeId } : {}),
+        },
+      },
+      {
+        onSuccess: (data) => {
+          setLocation(data.user.role === "borrower" ? "/borrower" : "/app/assess");
+        },
+      },
     );
   };
 
@@ -34,6 +49,8 @@ export default function SignUp() {
       <p className="text-sm text-muted-foreground text-center mt-1.5 mb-8">
         Assess MSMEs with alternate-data SakshamScores
       </p>
+
+      <RoleToggle value={role} onChange={setRole} />
 
       <form onSubmit={handleSubmit} className="space-y-5">
         <div className="space-y-1.5">
@@ -61,11 +78,27 @@ export default function SignUp() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
-            placeholder="you@bank.com"
+            placeholder={role === "borrower" ? "you@business.com" : "you@bank.com"}
             autoComplete="email"
             className="h-11 bg-white/5 border-white/10"
           />
         </div>
+
+        {role === "borrower" && (
+          <div className="space-y-1.5">
+            <Label htmlFor="msmeId" className="text-white/70">
+              MSME ID
+            </Label>
+            <Input
+              id="msmeId"
+              value={msmeId}
+              onChange={(e) => setMsmeId(e.target.value)}
+              required
+              placeholder="MSME-000001"
+              className="h-11 bg-white/5 border-white/10 font-mono"
+            />
+          </div>
+        )}
 
         <div className="space-y-1.5">
           <Label htmlFor="password" className="text-white/70">

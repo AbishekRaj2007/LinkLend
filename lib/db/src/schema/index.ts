@@ -155,6 +155,9 @@ export const users = pgTable("users", {
   email: text("email").notNull().unique(),
   passwordHash: text("password_hash").notNull(),
   name: text("name").notNull(),
+  role: text("role").notNull().default("lender"),
+  // fk-by-value to msme_master.msme_id; null for lenders, set for borrowers
+  msmeId: text("msme_id"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

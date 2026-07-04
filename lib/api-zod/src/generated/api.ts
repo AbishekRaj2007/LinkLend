@@ -108,6 +108,38 @@ export const GetPortfolioResponse = zod.object({
 
 
 /**
+ * Returns the scorecard for the MSME linked to the authenticated borrower.
+ * @summary Get my own scorecard
+ */
+export const GetMyScorecardResponse = zod.object({
+  "msme_id": zod.string(),
+  "overall_score": zod.number(),
+  "rating_band": zod.string(),
+  "pillars": zod.array(zod.object({
+  "name": zod.string(),
+  "score": zod.number(),
+  "reasons": zod.array(zod.string())
+})),
+  "confidence": zod.object({
+  "level": zod.string(),
+  "raise_by": zod.string()
+}),
+  "repayment": zod.object({
+  "sustainable_emi": zod.number(),
+  "basis": zod.string()
+}),
+  "flags": zod.object({
+  "consistency_alert": zod.boolean(),
+  "detail": zod.string()
+}),
+  "forecast": zod.object({
+  "months": zod.array(zod.string()),
+  "projected_net_surplus": zod.array(zod.number())
+})
+})
+
+
+/**
  * Creates a new user account and starts a session (sets httpOnly auth cookies).
  * @summary Create a new account
  */
@@ -119,14 +151,18 @@ export const signupBodyPasswordMin = 8;
 export const SignupBody = zod.object({
   "email": zod.string().email(),
   "password": zod.string().min(signupBodyPasswordMin),
-  "name": zod.string().min(1)
+  "name": zod.string().min(1),
+  "role": zod.enum(['lender', 'borrower']),
+  "msme_id": zod.string().optional()
 })
 
 export const SignupResponse = zod.object({
   "user": zod.object({
   "id": zod.number(),
   "email": zod.string().email(),
-  "name": zod.string()
+  "name": zod.string(),
+  "role": zod.enum(['lender', 'borrower']),
+  "msme_id": zod.string().optional()
 })
 })
 
@@ -147,7 +183,9 @@ export const LoginResponse = zod.object({
   "user": zod.object({
   "id": zod.number(),
   "email": zod.string().email(),
-  "name": zod.string()
+  "name": zod.string(),
+  "role": zod.enum(['lender', 'borrower']),
+  "msme_id": zod.string().optional()
 })
 })
 
@@ -160,7 +198,9 @@ export const RefreshResponse = zod.object({
   "user": zod.object({
   "id": zod.number(),
   "email": zod.string().email(),
-  "name": zod.string()
+  "name": zod.string(),
+  "role": zod.enum(['lender', 'borrower']),
+  "msme_id": zod.string().optional()
 })
 })
 
@@ -180,7 +220,9 @@ export const MeResponse = zod.object({
   "user": zod.object({
   "id": zod.number(),
   "email": zod.string().email(),
-  "name": zod.string()
+  "name": zod.string(),
+  "role": zod.enum(['lender', 'borrower']),
+  "msme_id": zod.string().optional()
 })
 })
 

@@ -1,0 +1,171 @@
+{
+  "seed": 424242,
+  "trainedAt": "2026-07-04T17:19:51.433Z",
+  "pillars": {
+    "businessVitality": {
+      "key": "businessVitality",
+      "label": "Business Vitality",
+      "featureNames": [
+        "turnover6moTrend",
+        "turnoverCAGR",
+        "turnoverVolatilityCV",
+        "invoiceCountTrend",
+        "seasonalityIndex"
+      ],
+      "means": [
+        0.014791154166570718,
+        0.2718684069854281,
+        0.1391672371556205,
+        0.006229091538088667,
+        0.44637878113958324
+      ],
+      "stds": [
+        0.1646529277608016,
+        1.466656017986562,
+        0.05183106459025726,
+        0.13464559490770822,
+        0.16406361357285995
+      ],
+      "weights": [
+        0.1910293733940623,
+        0.0501868963202868,
+        -0.4022532334078136,
+        0.019035412993409773,
+        0.21428282698283063
+      ],
+      "bias": 0.1634274261773898,
+      "calibration": {
+        "a": 0.36658734260551107,
+        "b": -0.12552961760506215
+      }
+    },
+    "cashflowHealth": {
+      "key": "cashflowHealth",
+      "label": "Cashflow Health",
+      "featureNames": [
+        "avgMonthlyNetInflow",
+        "inflowVolatilityCV",
+        "runwayMonths",
+        "negativeBalanceDays",
+        "dscrProxy"
+      ],
+      "means": [
+        -27914.83086589793,
+        0.13200464432690484,
+        13.765977785531103,
+        37.631,
+        0.36387230937142717
+      ],
+      "stds": [
+        56761.90406151261,
+        0.055390771172083866,
+        24.748923587178,
+        49.99538817731059,
+        1.3697405309687674
+      ],
+      "weights": [
+        -0.07876319788979029,
+        -0.0825317484888576,
+        -0.13870691161338425,
+        0.6173951160845317,
+        0.07796052030817424
+      ],
+      "bias": 0.21137109069219417,
+      "calibration": {
+        "a": 0.8794028557664776,
+        "b": -0.30383624282463845
+      }
+    },
+    "formalisationCompliance": {
+      "key": "formalisationCompliance",
+      "label": "Formalisation & Compliance",
+      "featureNames": [
+        "gstOnTimeFilingPct",
+        "monthsFiledOverMonthsActive",
+        "epfoActiveFlag",
+        "epfoContributionConsistency"
+      ],
+      "means": [
+        0.6365497085181665,
+        0.8886575168239987,
+        0.9055,
+        0.5812335860229291
+      ],
+      "stds": [
+        0.24654869364340481,
+        0.13071069522488052,
+        0.29252307601281596,
+        0.3063218614560759
+      ],
+      "weights": [
+        0.6910871104112166,
+        0.00833025384506396,
+        -0.4444712418824477,
+        0.7995119834663487
+      ],
+      "bias": 0.20770700039355855,
+      "calibration": {
+        "a": 1.1751138504357739,
+        "b": -0.35769323634560213
+      }
+    },
+    "bankingBehaviour": {
+      "key": "bankingBehaviour",
+      "label": "Banking Behaviour",
+      "featureNames": [
+        "bounceRate",
+        "avgBalanceBuffer",
+        "balanceStabilityCV",
+        "minBalanceEventCount"
+      ],
+      "means": [
+        0.4765857449443238,
+        -48438.43182032615,
+        1.9292537005098016,
+        35.831
+      ],
+      "stds": [
+        0.3158951117120754,
+        313245.0680528439,
+        2.4227928196908093,
+        44.90904629359232
+      ],
+      "weights": [
+        -0.6924987087290513,
+        -0.012374439462666614,
+        0.09303674033195738,
+        0.3258774056204429
+      ],
+      "bias": 0.20864837564588382,
+      "calibration": {
+        "a": 1.2078357829628474,
+        "b": -0.36316495326931614
+      }
+    },
+    "obligationsLeverage": {
+      "key": "obligationsLeverage",
+      "label": "Obligations & Leverage",
+      "featureNames": [
+        "obligationToInflowRatio",
+        "obligationCount"
+      ],
+      "means": [
+        1.9174873023256398,
+        1.456
+      ],
+      "stds": [
+        9.225464978845766,
+        1.1815515223637092
+      ],
+      "weights": [
+        -0.06587768754280461,
+        -0.364968129224337
+      ],
+      "bias": 0.16616636705803928,
+      "calibration": {
+        "a": 0.48379829596281265,
+        "b": -0.1638758308053922
+      }
+    }
+  }
+}
