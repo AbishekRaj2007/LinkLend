@@ -21,7 +21,11 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { useMe, useLogout, getMeQueryKey } from "@workspace/api-client-react";
 import { GaugeArc } from "./Dashboard";
-import Sidebar, { type Page, type RecentEntry } from "./Sidebar";
+import Sidebar, {
+  type Page,
+  type RecentEntry,
+  SAMPLE_RECENTS,
+} from "./Sidebar";
 
 interface Pillar {
   name: string;
@@ -210,10 +214,7 @@ export default function AssessmentView({
   const [current, setCurrent] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [recents, setRecents] = useState<RecentEntry[]>([
-    { msme_id: "MSME-4521", name: "Verdant Organics", score: 85, tone: "emerald" },
-    { msme_id: "MSME-3310", name: "Nova Kirana Mart", score: 58, tone: "red" },
-  ]);
+  const [recents, setRecents] = useState<RecentEntry[]>(SAMPLE_RECENTS);
 
   // Cached from the ProtectedRoute wrapper's own useMe() call — no extra
   // network request, react-query dedupes on the shared query key.

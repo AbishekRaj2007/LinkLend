@@ -30,6 +30,14 @@ export interface RecentEntry {
   tone: "emerald" | "amber" | "red";
 }
 
+// Shared sample data — used both as AssessmentView's initial recents and as
+// decorative content on the pre-login Login/SignUp pages (same sidebar,
+// rendered non-interactively there since there's no session yet).
+export const SAMPLE_RECENTS: RecentEntry[] = [
+  { msme_id: "MSME-4521", name: "Verdant Organics", score: 85, tone: "emerald" },
+  { msme_id: "MSME-3310", name: "Nova Kirana Mart", score: 58, tone: "red" },
+];
+
 const NAV_ITEMS: { page: Page; label: string; icon: typeof ScanLine }[] = [
   { page: "assess", label: "Assess MSME", icon: ScanLine },
   { page: "portfolio", label: "Portfolio", icon: BarChart3 },
