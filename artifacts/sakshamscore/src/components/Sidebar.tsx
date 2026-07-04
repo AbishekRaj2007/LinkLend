@@ -12,7 +12,14 @@ import {
   FileText,
   CircleUser,
   ChevronsUpDown,
+  LogOut,
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "./ui/dropdown-menu";
 
 export type Page = "assess" | "portfolio" | "approvals" | "reports";
 
@@ -43,6 +50,8 @@ interface SidebarProps {
   recents: RecentEntry[];
   onSelectRecent: (msmeId: string) => void;
   activeMsmeId?: string;
+  user?: { name: string; email: string };
+  onLogout?: () => void;
 }
 
 export default function Sidebar({
@@ -52,6 +61,8 @@ export default function Sidebar({
   recents,
   onSelectRecent,
   activeMsmeId,
+  user,
+  onLogout,
 }: SidebarProps) {
   const [collapsed, setCollapsed] = useState(false);
 
@@ -162,22 +173,36 @@ export default function Sidebar({
 
       {/* Footer / user */}
       <div className="shrink-0 border-t border-white/5 p-3">
-        <button
-          className={`w-full flex items-center gap-2 rounded-lg hover:bg-white/5 transition-colors ${
-            collapsed ? "justify-center p-2" : "px-2 py-2"
-          }`}
-        >
-          <CircleUser className="w-7 h-7 text-white/60 shrink-0" />
-          {!collapsed && (
-            <>
-              <span className="min-w-0 flex-1 text-left">
-                <span className="block text-sm text-white/85 truncate">Priya Nair</span>
-                <span className="block text-[11px] text-white/40 truncate">Credit Analyst</span>
-              </span>
-              <ChevronsUpDown className="w-3.5 h-3.5 text-white/30 shrink-0" />
-            </>
-          )}
-        </button>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              className={`w-full flex items-center gap-2 rounded-lg hover:bg-white/5 transition-colors ${
+                collapsed ? "justify-center p-2" : "px-2 py-2"
+              }`}
+            >
+              <CircleUser className="w-7 h-7 text-white/60 shrink-0" />
+              {!collapsed && (
+                <>
+                  <span className="min-w-0 flex-1 text-left">
+                    <span className="block text-sm text-white/85 truncate">
+                      {user?.name ?? "…"}
+                    </span>
+                    <span className="block text-[11px] text-white/40 truncate">
+                      {user?.email ?? ""}
+                    </span>
+                  </span>
+                  <ChevronsUpDown className="w-3.5 h-3.5 text-white/30 shrink-0" />
+                </>
+              )}
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" side="top" className="w-48">
+            <DropdownMenuItem onClick={onLogout} className="gap-2">
+              <LogOut className="w-4 h-4" />
+              Log out
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </motion.aside>
   );

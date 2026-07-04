@@ -66,6 +66,14 @@ export default defineConfig({
     fs: {
       strict: true,
     },
+    proxy: {
+      // Keeps the frontend and api-server same-origin in dev, so the
+      // browser sends/receives auth cookies without any CORS involved.
+      "/api": {
+        target: `http://localhost:${process.env.API_PORT ?? "5000"}`,
+        changeOrigin: true,
+      },
+    },
   },
   preview: {
     port,

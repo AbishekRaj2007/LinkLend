@@ -1,38 +1,52 @@
-import { useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { Switch, Route, Redirect, useLocation } from "wouter";
 import Dashboard from "./components/Dashboard";
 import AssessmentView from "./components/AssessmentView";
+import { type Page } from "./components/Sidebar";
+import SignUp from "./pages/SignUp";
+import Login from "./pages/Login";
+import ProtectedRoute from "./lib/ProtectedRoute";
 
-type View = "landing" | "assess";
+const PAGES: readonly Page[] = ["assess", "portfolio", "approvals", "reports"];
 
-function App() {
-  const [view, setView] = useState<View>("landing");
+function isPage(value: string): value is Page {
+  return (PAGES as readonly string[]).includes(value);
+}
+
+function LandingPage() {
+  const [, setLocation] = useLocation();
+  return <Dashboard onGetStarted={() => setLocation("/signup")} />;
+}
+
+function AssessmentRoute({ params }: { params: { page: string } }) {
+  const [, setLocation] = useLocation();
+  const page = isPage(params.page) ? params.page : "assess";
 
   return (
+    <ProtectedRoute>
+      <AssessmentView
+        page={page}
+        onNavigate={(next) => setLocation(`/app/${next}`)}
+        onBack={() => setLocation("/")}
+      />
+    </ProtectedRoute>
+  );
+}
+
+function App() {
+  return (
     <div className="min-h-[100dvh] w-full text-foreground bg-background">
-      <AnimatePresence mode="wait">
-        {view === "landing" ? (
-          <motion.div
-            key="landing"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0, scale: 0.98 }}
-            transition={{ duration: 0.35, ease: "easeOut" }}
-          >
-            <Dashboard onGetStarted={() => setView("assess")} />
-          </motion.div>
-        ) : (
-          <motion.div
-            key="assess"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 20 }}
-            transition={{ duration: 0.35, ease: "easeOut" }}
-          >
-            <AssessmentView onBack={() => setView("landing")} />
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <Switch>
+        <Route path="/" component={LandingPage} />
+        <Route path="/signup" component={SignUp} />
+        <Route path="/login" component={Login} />
+        <Route path="/app/:page" component={AssessmentRoute} />
+        <Route path="/app">
+          <Redirect to="/app/assess" />
+        </Route>
+        <Route>
+          <Redirect to="/" />
+        </Route>
+      </Switch>
     </div>
   );
 }

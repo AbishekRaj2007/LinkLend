@@ -6,6 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface ErrorResponse {
-  message: string;
+export interface SignupRequest {
+  email: string;
+  /** @minLength 8 */
+  password: string;
+  /** @minLength 1 */
+  name: string;
 }

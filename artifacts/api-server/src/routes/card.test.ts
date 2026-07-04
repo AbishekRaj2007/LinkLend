@@ -23,6 +23,6 @@ describe("GET /api/card/:msme_id", () => {
   it("returns 404 when the MSME has not been assessed yet", async () => {
     const res = await request(app).get("/api/card/MSME-000999");
     expect(res.status).toBe(404);
-    expect(res.body.error.length).toBeGreaterThan(0);
+    expect(res.body.message.length).toBeGreaterThan(0);
   });
 });

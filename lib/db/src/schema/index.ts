@@ -24,6 +24,7 @@ import {
   integer,
   boolean,
   real,
+  timestamp,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
@@ -123,3 +124,66 @@ export const insertObligationsSchema = createInsertSchema(obligations).omit({
 });
 export type InsertObligations = z.infer<typeof insertObligationsSchema>;
 export type Obligations = typeof obligations.$inferSelect;
+
+// ---------------------------------------------------------------------------
+// msme_credit_scores
+// ---------------------------------------------------------------------------
+export const msmeCreditScores = pgTable("msme_credit_scores", {
+  id: serial("id").primaryKey(),
+  // fk-by-value to msme_master.msme_id
+  msmeId: text("msme_id").notNull(),
+  cmrRank: integer("cmr_rank").notNull(),
+  cibilScore: integer("cibil_score").notNull(),
+  creditUtilizationPct: real("credit_utilization_pct").notNull(),
+  riskCategory: text("risk_category").notNull(),
+  flags: text("flags").array().notNull(),
+});
+
+export const insertMsmeCreditScoresSchema = createInsertSchema(
+  msmeCreditScores,
+).omit({ id: true });
+export type InsertMsmeCreditScores = z.infer<
+  typeof insertMsmeCreditScoresSchema
+>;
+export type MsmeCreditScores = typeof msmeCreditScores.$inferSelect;
+
+// ---------------------------------------------------------------------------
+// users
+// ---------------------------------------------------------------------------
+export const users = pgTable("users", {
+  id: serial("id").primaryKey(),
+  email: text("email").notNull().unique(),
+  passwordHash: text("password_hash").notNull(),
+  name: text("name").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export const insertUserSchema = createInsertSchema(users).omit({
+  id: true,
+  createdAt: true,
+});
+export type InsertUser = z.infer<typeof insertUserSchema>;
+export type User = typeof users.$inferSelect;
+
+// ---------------------------------------------------------------------------
+// refresh_tokens
+// ---------------------------------------------------------------------------
+export const refreshTokens = pgTable("refresh_tokens", {
+  id: serial("id").primaryKey(),
+  // fk-by-value to users.id
+  userId: integer("user_id").notNull(),
+  tokenHash: text("token_hash").notNull().unique(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export const insertRefreshTokenSchema = createInsertSchema(
+  refreshTokens,
+).omit({ id: true, createdAt: true, revokedAt: true });
+export type InsertRefreshToken = z.infer<typeof insertRefreshTokenSchema>;
+export type RefreshToken = typeof refreshTokens.$inferSelect;

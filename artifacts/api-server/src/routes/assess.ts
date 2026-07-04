@@ -7,13 +7,13 @@ const router: IRouter = Router();
 router.post("/assess", (req, res) => {
   const parsed = AssessBody.safeParse(req.body);
   if (!parsed.success) {
-    res.status(400).json({ error: "Invalid request body: msme_id is required." });
+    res.status(400).json({ message: "Invalid request body: msme_id is required." });
     return;
   }
 
   const card = computeCard(parsed.data.msme_id);
   if (!card) {
-    res.status(404).json({ error: `Unknown MSME: ${parsed.data.msme_id}` });
+    res.status(404).json({ message: `Unknown MSME: ${parsed.data.msme_id}` });
     return;
   }
 

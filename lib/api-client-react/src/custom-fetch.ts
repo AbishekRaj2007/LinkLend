@@ -322,14 +322,50 @@ async function parseSuccessBody(
   }
 }
 
-export async function customFetch<T = unknown>(
-  input: RequestInfo | URL,
-  options: CustomFetchOptions = {},
-): Promise<T> {
-  input = applyBaseUrl(input);
-  const { responseType = "auto", headers: headersInit, ...init } = options;
+// ---------------------------------------------------------------------------
+// Silent access-token refresh
+//
+// The web app carries its session as httpOnly cookies (see the NOTE on
+// setAuthTokenGetter above), so a 401 here most often just means the short-
+// lived access token expired. Rather than bouncing the user to /login every
+// 15 minutes, we transparently exchange the refresh-token cookie for a new
+// access token once and retry the original request. This never applies to
+// the auth endpoints themselves — retrying a failed login/signup would mask
+// the real error, and retrying a failed refresh would loop forever.
+// ---------------------------------------------------------------------------
 
-  const method = resolveMethod(input, init.method);
+const AUTH_REFRESH_EXEMPT_PATHS = [
+  "/api/auth/login",
+  "/api/auth/signup",
+  "/api/auth/refresh",
+  "/api/auth/logout",
+];
+
+function isExemptFromSilentRefresh(url: string): boolean {
+  return AUTH_REFRESH_EXEMPT_PATHS.some((path) => url.includes(path));
+}
+
+let _refreshInFlight: Promise<boolean> | null = null;
+
+// Deduplicated so several concurrent 401s only trigger one refresh call.
+function silentRefresh(): Promise<boolean> {
+  if (!_refreshInFlight) {
+    _refreshInFlight = fetch(applyBaseUrl("/api/auth/refresh"), { method: "POST" })
+      .then((res) => res.ok)
+      .catch(() => false)
+      .finally(() => {
+        _refreshInFlight = null;
+      });
+  }
+  return _refreshInFlight;
+}
+
+async function performFetch(
+  input: RequestInfo | URL,
+  options: CustomFetchOptions,
+  method: string,
+): Promise<Response> {
+  const { headers: headersInit, ...init } = options;
 
   if (init.body != null && (method === "GET" || method === "HEAD")) {
     throw new TypeError(`customFetch: ${method} requests cannot have a body.`);
@@ -345,7 +381,7 @@ export async function customFetch<T = unknown>(
     headers.set("content-type", "application/json");
   }
 
-  if (responseType === "json" && !headers.has("accept")) {
+  if ((options.responseType ?? "auto") === "json" && !headers.has("accept")) {
     headers.set("accept", DEFAULT_JSON_ACCEPT);
   }
 
@@ -358,9 +394,26 @@ export async function customFetch<T = unknown>(
     }
   }
 
+  return fetch(input, { ...init, method, headers });
+}
+
+export async function customFetch<T = unknown>(
+  input: RequestInfo | URL,
+  options: CustomFetchOptions = {},
+): Promise<T> {
+  input = applyBaseUrl(input);
+  const { responseType = "auto" } = options;
+  const method = resolveMethod(input, options.method);
   const requestInfo = { method, url: resolveUrl(input) };
 
-  const response = await fetch(input, { ...init, method, headers });
+  let response = await performFetch(input, options, method);
+
+  if (response.status === 401 && !isExemptFromSilentRefresh(requestInfo.url)) {
+    const refreshed = await silentRefresh();
+    if (refreshed) {
+      response = await performFetch(input, options, method);
+    }
+  }
 
   if (!response.ok) {
     const errorData = await parseErrorBody(response, method);

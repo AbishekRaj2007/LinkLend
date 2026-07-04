@@ -9,7 +9,7 @@ router.get("/card/:msme_id", (req, res) => {
   if (!card) {
     res
       .status(404)
-      .json({ error: `No cached scorecard for MSME: ${req.params.msme_id}` });
+      .json({ message: `No cached scorecard for MSME: ${req.params.msme_id}` });
     return;
   }
 

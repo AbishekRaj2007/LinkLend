@@ -12,6 +12,8 @@ tags:
     description: Health operations
   - name: scoring
     description: MSME assessment, scorecard, and portfolio operations
+  - name: auth
+    description: Authentication operations
 paths:
   /healthz:
     get:
@@ -89,6 +91,109 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PortfolioResponse"
+  /auth/signup:
+    post:
+      operationId: signup
+      tags: [auth]
+      summary: Create a new account
+      description: Creates a new user account and starts a session (sets httpOnly auth cookies).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SignupRequest"
+      responses:
+        "201":
+          description: Account created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "409":
+          description: An account with this email already exists
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "400":
+          description: Invalid signup payload
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /auth/login:
+    post:
+      operationId: login
+      tags: [auth]
+      summary: Log in
+      description: Verifies credentials and starts a session (sets httpOnly auth cookies).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Logged in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          description: Invalid email or password
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /auth/refresh:
+    post:
+      operationId: refresh
+      tags: [auth]
+      summary: Refresh the session
+      description: Exchanges a valid refresh-token cookie for a new access/refresh token pair.
+      responses:
+        "200":
+          description: Session refreshed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          description: Missing, invalid, expired, or revoked refresh token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /auth/logout:
+    post:
+      operationId: logout
+      tags: [auth]
+      summary: Log out
+      description: Revokes the current refresh token and clears auth cookies.
+      responses:
+        "204":
+          description: Logged out
+  /auth/me:
+    get:
+      operationId: me
+      tags: [auth]
+      summary: Get the current user
+      description: Returns the authenticated user, based on the access-token cookie.
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
 components:
   schemas:
     HealthStatus:
@@ -101,10 +206,10 @@ components:
     ErrorResponse:
       type: object
       properties:
-        error:
+        message:
           type: string
       required:
-        - error
+        - message
     AssessRequest:
       type: object
       properties:
@@ -241,3 +346,52 @@ components:
         - scoreDistribution
         - sectorConcentration
         - expectedDefaultEstimate
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+      required:
+        - id
+        - email
+        - name
+    AuthResponse:
+      type: object
+      properties:
+        user:
+          $ref: "#/components/schemas/User"
+      required:
+        - user
+    SignupRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+        name:
+          type: string
+          minLength: 1
+      required:
+        - email
+        - password
+        - name
+    LoginRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 1
+      required:
+        - email
+        - password

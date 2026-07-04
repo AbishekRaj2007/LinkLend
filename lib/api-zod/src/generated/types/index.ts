@@ -7,14 +7,18 @@
  */
 
 export * from './assessRequest';
+export * from './authResponse';
 export * from './cardResponse';
 export * from './confidence';
 export * from './errorResponse';
 export * from './flags';
 export * from './forecast';
 export * from './healthStatus';
+export * from './loginRequest';
 export * from './pillar';
 export * from './portfolioResponse';
 export * from './repayment';
 export * from './scoreBucket';
 export * from './sectorConcentration';
+export * from './signupRequest';
+export * from './user';

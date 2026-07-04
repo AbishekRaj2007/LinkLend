@@ -18,6 +18,8 @@ import {
   Area,
   AreaChart,
 } from "recharts";
+import { useQueryClient } from "@tanstack/react-query";
+import { useMe, useLogout, getMeQueryKey } from "@workspace/api-client-react";
 import { GaugeArc } from "./Dashboard";
 import Sidebar, { type Page, type RecentEntry } from "./Sidebar";
 
@@ -193,8 +195,17 @@ function ComingSoonPage({ page }: { page: Exclude<Page, "assess"> }) {
   );
 }
 
-export default function AssessmentView({ onBack }: { onBack?: () => void }) {
-  const [page, setPage] = useState<Page>("assess");
+interface AssessmentViewProps {
+  page: Page;
+  onNavigate: (page: Page) => void;
+  onBack?: () => void;
+}
+
+export default function AssessmentView({
+  page,
+  onNavigate,
+  onBack,
+}: AssessmentViewProps) {
   const [query, setQuery] = useState("");
   const [current, setCurrent] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(false);
@@ -203,6 +214,18 @@ export default function AssessmentView({ onBack }: { onBack?: () => void }) {
     { msme_id: "MSME-4521", name: "Verdant Organics", score: 85, tone: "emerald" },
     { msme_id: "MSME-3310", name: "Nova Kirana Mart", score: 58, tone: "red" },
   ]);
+
+  // Cached from the ProtectedRoute wrapper's own useMe() call — no extra
+  // network request, react-query dedupes on the shared query key.
+  const { data: meData } = useMe();
+  const logoutMutation = useLogout();
+  const queryClient = useQueryClient();
+
+  const handleLogout = async () => {
+    await logoutMutation.mutateAsync();
+    queryClient.removeQueries({ queryKey: getMeQueryKey() });
+    onBack?.();
+  };
 
   const pushRecent = (p: Profile) => {
     setRecents((prev) => [
@@ -237,14 +260,14 @@ export default function AssessmentView({ onBack }: { onBack?: () => void }) {
   };
 
   const handleNewAssessment = () => {
-    setPage("assess");
+    onNavigate("assess");
     setQuery("");
     setCurrent(null);
     setError(null);
   };
 
   const handleSelectRecent = (msmeId: string) => {
-    setPage("assess");
+    onNavigate("assess");
     assess(msmeId);
   };
 
@@ -252,11 +275,13 @@ export default function AssessmentView({ onBack }: { onBack?: () => void }) {
     <div className="h-[100dvh] flex">
       <Sidebar
         activePage={page}
-        onNavigate={setPage}
+        onNavigate={onNavigate}
         onNewAssessment={handleNewAssessment}
         recents={recents}
         onSelectRecent={handleSelectRecent}
         activeMsmeId={current?.msme_id}
+        user={meData?.user}
+        onLogout={handleLogout}
       />
 
       <div className="flex-1 min-w-0 flex flex-col">

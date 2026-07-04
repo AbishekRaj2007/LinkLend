@@ -6,11 +6,17 @@ import {
   transactions,
   epfo,
   obligations,
+  msmeCreditScores,
+  users,
+  refreshTokens,
   insertMsmeMasterSchema,
   insertGstReturnsSchema,
   insertTransactionsSchema,
   insertEpfoSchema,
   insertObligationsSchema,
+  insertMsmeCreditScoresSchema,
+  insertUserSchema,
+  insertRefreshTokenSchema,
 } from "./index";
 
 describe("schema tables", () => {
@@ -80,6 +86,36 @@ describe("schema tables", () => {
         "existingEmis",
         "monthlyObligation",
         "bounceCount",
+      ],
+    },
+    {
+      name: "msme_credit_scores",
+      table: msmeCreditScores,
+      columns: [
+        "id",
+        "msmeId",
+        "cmrRank",
+        "cibilScore",
+        "creditUtilizationPct",
+        "riskCategory",
+        "flags",
+      ],
+    },
+    {
+      name: "users",
+      table: users,
+      columns: ["id", "email", "passwordHash", "name", "createdAt"],
+    },
+    {
+      name: "refresh_tokens",
+      table: refreshTokens,
+      columns: [
+        "id",
+        "userId",
+        "tokenHash",
+        "expiresAt",
+        "revokedAt",
+        "createdAt",
       ],
     },
   ] as const;
@@ -166,5 +202,46 @@ describe("insert schemas", () => {
 
     const { monthlyObligation: _omit, ...missing } = valid;
     expect(insertObligationsSchema.safeParse(missing).success).toBe(false);
+  });
+
+  it("insertMsmeCreditScoresSchema parses a valid row and rejects a missing required field", () => {
+    const valid = {
+      msmeId: "MSME-0001",
+      cmrRank: 4,
+      cibilScore: 690,
+      creditUtilizationPct: 35.5,
+      riskCategory: "Moderate Risk",
+      flags: ["high_utilization", "low_cibil_score"],
+    };
+    expect(insertMsmeCreditScoresSchema.parse(valid)).toEqual(valid);
+
+    const { cibilScore: _omit, ...missing } = valid;
+    expect(insertMsmeCreditScoresSchema.safeParse(missing).success).toBe(
+      false,
+    );
+  });
+
+  it("insertUserSchema parses a valid row and rejects a missing required field", () => {
+    const valid = {
+      email: "analyst@example.com",
+      passwordHash: "$2b$12$abcdefghijklmnopqrstuv",
+      name: "Priya Nair",
+    };
+    expect(insertUserSchema.parse(valid)).toEqual(valid);
+
+    const { email: _omit, ...missing } = valid;
+    expect(insertUserSchema.safeParse(missing).success).toBe(false);
+  });
+
+  it("insertRefreshTokenSchema parses a valid row and rejects a missing required field", () => {
+    const valid = {
+      userId: 1,
+      tokenHash: "a".repeat(64),
+      expiresAt: new Date("2026-08-01T00:00:00Z"),
+    };
+    expect(insertRefreshTokenSchema.parse(valid)).toEqual(valid);
+
+    const { tokenHash: _omit, ...missing } = valid;
+    expect(insertRefreshTokenSchema.safeParse(missing).success).toBe(false);
   });
 });

@@ -1,5 +1,6 @@
 import express, { type Express } from "express";
 import cors from "cors";
+import cookieParser from "cookie-parser";
 import pinoHttp from "pino-http";
 import router from "./routes";
 import { logger } from "./lib/logger";
@@ -25,7 +26,15 @@ app.use(
     },
   }),
 );
-app.use(cors());
+// Auth cookies are read cross-request, so the frontend origin must be
+// explicit (a wildcard CORS origin can't be combined with credentials).
+app.use(
+  cors({
+    origin: process.env.FRONTEND_ORIGIN ?? "http://localhost:5173",
+    credentials: true,
+  }),
+);
+app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 

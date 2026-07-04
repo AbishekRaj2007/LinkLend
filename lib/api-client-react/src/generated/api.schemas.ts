@@ -10,7 +10,7 @@ export interface HealthStatus {
 }
 
 export interface ErrorResponse {
-  error: string;
+  message: string;
 }
 
 export interface AssessRequest {
@@ -69,5 +69,29 @@ export interface PortfolioResponse {
   scoreDistribution: ScoreBucket[];
   sectorConcentration: SectorConcentration[];
   expectedDefaultEstimate: number;
+}
+
+export interface User {
+  id: number;
+  email: string;
+  name: string;
+}
+
+export interface AuthResponse {
+  user: User;
+}
+
+export interface SignupRequest {
+  email: string;
+  /** @minLength 8 */
+  password: string;
+  /** @minLength 1 */
+  name: string;
+}
+
+export interface LoginRequest {
+  email: string;
+  /** @minLength 1 */
+  password: string;
 }
 

@@ -21,7 +21,7 @@ describe("POST /api/assess", () => {
   it("returns 400 when msme_id is missing", async () => {
     const res = await request(app).post("/api/assess").send({});
     expect(res.status).toBe(400);
-    expect(res.body.error.length).toBeGreaterThan(0);
+    expect(res.body.message.length).toBeGreaterThan(0);
   });
 
   it("returns 404 for an unknown msme_id", async () => {
@@ -29,6 +29,6 @@ describe("POST /api/assess", () => {
       .post("/api/assess")
       .send({ msme_id: UNKNOWN_ID });
     expect(res.status).toBe(404);
-    expect(res.body.error.length).toBeGreaterThan(0);
+    expect(res.body.message.length).toBeGreaterThan(0);
   });
 });

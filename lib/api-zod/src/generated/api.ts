@@ -107,3 +107,81 @@ export const GetPortfolioResponse = zod.object({
 })
 
 
+/**
+ * Creates a new user account and starts a session (sets httpOnly auth cookies).
+ * @summary Create a new account
+ */
+export const signupBodyPasswordMin = 8;
+
+
+
+
+export const SignupBody = zod.object({
+  "email": zod.string().email(),
+  "password": zod.string().min(signupBodyPasswordMin),
+  "name": zod.string().min(1)
+})
+
+export const SignupResponse = zod.object({
+  "user": zod.object({
+  "id": zod.number(),
+  "email": zod.string().email(),
+  "name": zod.string()
+})
+})
+
+
+/**
+ * Verifies credentials and starts a session (sets httpOnly auth cookies).
+ * @summary Log in
+ */
+
+
+
+export const LoginBody = zod.object({
+  "email": zod.string().email(),
+  "password": zod.string().min(1)
+})
+
+export const LoginResponse = zod.object({
+  "user": zod.object({
+  "id": zod.number(),
+  "email": zod.string().email(),
+  "name": zod.string()
+})
+})
+
+
+/**
+ * Exchanges a valid refresh-token cookie for a new access/refresh token pair.
+ * @summary Refresh the session
+ */
+export const RefreshResponse = zod.object({
+  "user": zod.object({
+  "id": zod.number(),
+  "email": zod.string().email(),
+  "name": zod.string()
+})
+})
+
+
+/**
+ * Revokes the current refresh token and clears auth cookies.
+ * @summary Log out
+ */
+export const LogoutResponse = zod.void()
+
+
+/**
+ * Returns the authenticated user, based on the access-token cookie.
+ * @summary Get the current user
+ */
+export const MeResponse = zod.object({
+  "user": zod.object({
+  "id": zod.number(),
+  "email": zod.string().email(),
+  "name": zod.string()
+})
+})
+
+
