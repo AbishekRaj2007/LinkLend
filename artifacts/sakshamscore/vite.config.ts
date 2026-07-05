@@ -48,6 +48,14 @@ export default defineConfig({
     fs: {
       strict: true,
     },
+    // Proxy API calls to the Express server (dev runs on port 5000) so the
+    // browser can use relative `/api` paths without CORS or env config.
+    proxy: {
+      "/api": {
+        target: process.env.API_PROXY_TARGET ?? "http://localhost:5000",
+        changeOrigin: true,
+      },
+    },
   },
   preview: {
     port,
