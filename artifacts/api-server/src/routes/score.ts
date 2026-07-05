@@ -1,19 +1,21 @@
 import { Router, type IRouter } from "express";
-import { listMsmeIds, loadBundle } from "../data/store";
+import { getDataSource } from "../data/source";
 import { scoreMsme } from "../scoring/score";
 import { narrateScorecard } from "../lib/groq";
 
 const router: IRouter = Router();
 
-/** All MSME ids available to score. */
+/** All MSME ids available to score, plus which data source is active. */
 router.get("/msmes", async (_req, res) => {
-  const ids = await listMsmeIds();
-  res.json({ msmeIds: ids });
+  const source = await getDataSource();
+  const ids = await source.listMsmeIds();
+  res.json({ msmeIds: ids, source: source.mode });
 });
 
 /** Deterministic scorecard for one MSME. */
 router.get("/msmes/:id/scorecard", async (req, res) => {
-  const bundle = await loadBundle(req.params.id);
+  const source = await getDataSource();
+  const bundle = await source.loadBundle(req.params.id);
   if (!bundle) {
     res.status(404).json({ error: `MSME ${req.params.id} not found` });
     return;
@@ -23,7 +25,8 @@ router.get("/msmes/:id/scorecard", async (req, res) => {
 
 /** Scorecard plus an AI-narrated credit memo (narration only, never recompute). */
 router.get("/msmes/:id/memo", async (req, res) => {
-  const bundle = await loadBundle(req.params.id);
+  const source = await getDataSource();
+  const bundle = await source.loadBundle(req.params.id);
   if (!bundle) {
     res.status(404).json({ error: `MSME ${req.params.id} not found` });
     return;
