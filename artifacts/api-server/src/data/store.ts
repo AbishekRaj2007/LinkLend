@@ -1,8 +1,14 @@
-import type {
-  InsertMsmeMaster,
-  InsertTransactions,
-} from "@workspace/db/schema";
-import { generateDataset } from "../scripts/generate-data";
+import { eq } from "drizzle-orm";
+import {
+  db,
+  msmeMaster,
+  gstReturns,
+  transactions,
+  epfo,
+  obligations,
+  type InsertTransactions,
+  type MsmeMaster,
+} from "@workspace/db";
 import {
   groupRawByMsme,
   computeFeatures,
@@ -16,27 +22,64 @@ import {
   type FeatureSnapshot,
 } from "../scoring";
 
-// The runtime "DB" is Gate 1's seeded, in-memory dataset — the same seed/count
-// the models were trained on, so scores line up. No live Postgres is required.
-const SEED = 424242;
-const COUNT = 2000;
+/** Point fetch: one MSME's rows across all five source tables, or undefined if unknown. */
+export async function getRaw(id: string): Promise<RawSourceData | undefined> {
+  const [master] = await db
+    .select()
+    .from(msmeMaster)
+    .where(eq(msmeMaster.msmeId, id))
+    .limit(1);
+  if (!master) return undefined;
 
-interface Store {
-  masters: InsertMsmeMaster[];
+  const [gst, txns, epfoRows, obligationRows] = await Promise.all([
+    db.select().from(gstReturns).where(eq(gstReturns.msmeId, id)),
+    db.select().from(transactions).where(eq(transactions.msmeId, id)),
+    db.select().from(epfo).where(eq(epfo.msmeId, id)),
+    db.select().from(obligations).where(eq(obligations.msmeId, id)),
+  ]);
+
+  return {
+    master,
+    gstReturns: gst,
+    transactions: txns,
+    epfo: epfoRows,
+    obligations: obligationRows,
+  };
+}
+
+interface AllRaw {
+  masters: MsmeMaster[];
   rawById: Map<string, RawSourceData>;
 }
 
-let store: Store | null = null;
+// The full five-table pull is ~175k rows across every MSME — fine for a
+// one-time load, too slow to repeat on every /portfolio hit (each of these
+// selects alone can take tens of seconds over a pooled connection). Cache it
+// once per process, same freshness semantics the old in-memory dataset had.
+let allRawCache: AllRaw | null = null;
 
-function getStore(): Store {
-  if (store) return store;
-  const ds = generateDataset({ seed: SEED, count: COUNT });
-  store = { masters: ds.msmeMaster, rawById: groupRawByMsme(ds) };
-  return store;
-}
+/** Bulk fetch: every MSME's master row plus its grouped source rows (for /portfolio and validation). */
+export async function getAllRaw(): Promise<AllRaw> {
+  if (allRawCache) return allRawCache;
 
-export function getRaw(id: string): RawSourceData | undefined {
-  return getStore().rawById.get(id);
+  const [masters, gst, txns, epfoRows, obligationRows] = await Promise.all([
+    db.select().from(msmeMaster),
+    db.select().from(gstReturns),
+    db.select().from(transactions),
+    db.select().from(epfo),
+    db.select().from(obligations),
+  ]);
+
+  const rawById = groupRawByMsme({
+    msmeMaster: masters,
+    gstReturns: gst,
+    transactions: txns,
+    epfo: epfoRows,
+    obligations: obligationRows,
+  });
+
+  allRawCache = { masters, rawById };
+  return allRawCache;
 }
 
 /** Monthly net-inflow snapshots from a transaction history (for the forecast). */
@@ -55,8 +98,8 @@ export function monthlySnapshots(
 }
 
 /** Full scorecard for one MSME, or null if the id is unknown. */
-export function computeCard(id: string): Card | null {
-  const raw = getRaw(id);
+export async function computeCard(id: string): Promise<Card | null> {
+  const raw = await getRaw(id);
   if (!raw) return null;
   const f = computeFeatures(id, raw);
   return assembleCard(id, f, monthlySnapshots(raw.transactions));
@@ -96,8 +139,8 @@ export interface Portfolio {
 }
 
 /** Aggregate scores across every MSME currently in the store. */
-export function buildPortfolio(): Portfolio {
-  const { masters, rawById } = getStore();
+export async function buildPortfolio(): Promise<Portfolio> {
+  const { masters, rawById } = await getAllRaw();
   const models = getModels();
 
   const bucketCounts = new Map<string, number>(

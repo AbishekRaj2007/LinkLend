@@ -5,8 +5,8 @@ import { requireAuth, requireRole } from "../middlewares/requireAuth";
 
 const router: IRouter = Router();
 
-router.get("/portfolio", requireAuth, requireRole("lender"), (_req, res) => {
-  res.json(GetPortfolioResponse.parse(buildPortfolio()));
+router.get("/portfolio", requireAuth, requireRole("lender"), async (_req, res) => {
+  res.json(GetPortfolioResponse.parse(await buildPortfolio()));
 });
 
 export default router;

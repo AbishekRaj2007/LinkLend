@@ -118,7 +118,7 @@ router.post("/auth/signup", authRateLimiter, async (req, res) => {
         .json({ message: "msme_id is required for borrower accounts" });
       return;
     }
-    if (!getRaw(candidateId)) {
+    if (!(await getRaw(candidateId))) {
       res.status(400).json({ message: `Unknown MSME: ${candidateId}` });
       return;
     }

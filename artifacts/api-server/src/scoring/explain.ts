@@ -108,6 +108,16 @@ const PHRASES: Record<string, Phrase> = {
   },
 };
 
+// epfoActiveFlag is forced to 0 whenever epfoContributionConsistency is (see
+// computeCompliance) — that collinearity trained epfoActiveFlag's coefficient
+// with a sign opposite the intuitive "present = good" direction its phrase
+// pair assumes, so its contribution-based favorable/adverse label can
+// misdescribe the actual data (e.g. "No EPFO footprint" for a company with an
+// active one). epfoContributionConsistency already covers the presence
+// signal correctly (it's 0 exactly when there's no footprint), so excluding
+// this one feature from reason codes loses no information.
+const EXCLUDED_REASON_FEATURES = new Set(["epfoActiveFlag"]);
+
 interface Contribution {
   name: string;
   contribution: number;
@@ -138,9 +148,9 @@ export function reasonCodes(
   featureRecord: FeatureRecord,
   trainedWeights: PillarModel,
 ): string[] {
-  const ranked = contributions(trainedWeights, featureRecord).sort(
-    (a, b) => Math.abs(b.contribution) - Math.abs(a.contribution),
-  );
+  const ranked = contributions(trainedWeights, featureRecord)
+    .filter((c) => !EXCLUDED_REASON_FEATURES.has(c.name))
+    .sort((a, b) => Math.abs(b.contribution) - Math.abs(a.contribution));
   const top = ranked.slice(0, Math.min(3, ranked.length));
   return top.map((c) => phraseFor(c.name, c.contribution >= 0));
 }
@@ -159,7 +169,7 @@ export function overallReason(
     all.push(...contributions(models.pillars[p.key], featureRecord));
   }
   const adverse = all
-    .filter((c) => c.contribution < 0)
+    .filter((c) => c.contribution < 0 && !EXCLUDED_REASON_FEATURES.has(c.name))
     .sort((a, b) => a.contribution - b.contribution)
     .slice(0, 2);
 

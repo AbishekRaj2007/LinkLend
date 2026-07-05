@@ -9,14 +9,14 @@ router.get(
   "/me/scorecard",
   requireAuth,
   requireRole("borrower"),
-  (req, res) => {
+  async (req, res) => {
     const msmeId = req.user!.msmeId;
     if (!msmeId) {
       res.status(404).json({ message: "No MSME linked to this account" });
       return;
     }
 
-    const card = computeCard(msmeId);
+    const card = await computeCard(msmeId);
     if (!card) {
       res.status(404).json({ message: `Unknown MSME: ${msmeId}` });
       return;
