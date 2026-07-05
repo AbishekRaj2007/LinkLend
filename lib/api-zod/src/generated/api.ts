@@ -90,6 +90,37 @@ export const GetCardResponse = zod.object({
 
 
 /**
+ * Return every persisted assessment for an MSME, oldest first, for a score trend.
+ * @summary Get an MSME's score history
+ */
+export const GetCardHistoryParams = zod.object({
+  "msme_id": zod.coerce.string()
+})
+
+export const GetCardHistoryResponseItem = zod.object({
+  "id": zod.number(),
+  "msme_id": zod.string(),
+  "overall_score": zod.number(),
+  "rating_band": zod.string(),
+  "created_at": zod.string()
+})
+export const GetCardHistoryResponse = zod.array(GetCardHistoryResponseItem)
+
+
+/**
+ * Return a plain-English underwriting memo for the MSME's most recent assessment. Generated once via Groq and cached; repeat calls return the cached memo. The MSME must have been assessed first.
+ * @summary Generate (or fetch) an AI credit memo
+ */
+export const GenerateCardMemoParams = zod.object({
+  "msme_id": zod.coerce.string()
+})
+
+export const GenerateCardMemoResponse = zod.object({
+  "memo": zod.string()
+})
+
+
+/**
  * Aggregate score distribution, sector concentration, and expected default across all MSMEs.
  * @summary Portfolio analytics
  */

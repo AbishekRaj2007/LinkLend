@@ -18,6 +18,11 @@ Install: `pnpm install` from the repo root (a `preinstall` hook refuses npm/yarn
 
 Required env vars (`.env`, not committed): `DATABASE_URL` (Postgres/Supabase),
 `JWT_ACCESS_SECRET`, `FRONTEND_ORIGIN` (defaults to `http://localhost:5173`).
+`GROQ_API_KEY` is required only for the AI features (credit memos, borrower coach,
+scorecard Q&A, document ingestion) — the app runs without it, but those endpoints 500.
+The AI layer uses **Groq** (OpenAI-compatible, `groq-sdk`); Claude/Anthropic and OpenAI
+are not used. The LLM only explains an already-computed scorecard — it never computes or
+alters a score (the scoring engine stays pure deterministic TS, see below).
 
 - `pnpm run dev` — frontend (`:5173`) + API server (`:5000`) together
 - `pnpm run dev:web` / `pnpm run dev:api` — just one side

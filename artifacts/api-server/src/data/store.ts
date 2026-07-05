@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, desc } from "drizzle-orm";
 import {
   db,
   msmeMaster,
@@ -6,6 +6,7 @@ import {
   transactions,
   epfo,
   obligations,
+  msmeScoreHistory,
   type InsertTransactions,
   type MsmeMaster,
 } from "@workspace/db";
@@ -115,6 +116,103 @@ export function cacheCard(card: Card): void {
 
 export function getCachedCard(id: string): Card | undefined {
   return cardCache.get(id);
+}
+
+// --- score history -----------------------------------------------------------
+
+/** Persist a computed card as one score-history row. */
+export async function saveScoreHistory(
+  card: Card,
+  userId: number | null,
+): Promise<void> {
+  await db.insert(msmeScoreHistory).values({
+    msmeId: card.msme_id,
+    overallScore: card.overall_score,
+    ratingBand: card.rating_band,
+    pillars: card.pillars,
+    confidence: card.confidence,
+    repayment: card.repayment,
+    flags: card.flags,
+    forecast: card.forecast,
+    assessedByUserId: userId,
+  });
+}
+
+/** One point on an MSME's score trend (lean — for charting, not the full card). */
+export interface ScoreHistoryEntry {
+  id: number;
+  msme_id: string;
+  overall_score: number;
+  rating_band: string;
+  created_at: string;
+}
+
+/** All persisted assessments for an MSME, oldest first. */
+export async function getScoreHistory(
+  msmeId: string,
+): Promise<ScoreHistoryEntry[]> {
+  const rows = await db
+    .select({
+      id: msmeScoreHistory.id,
+      msmeId: msmeScoreHistory.msmeId,
+      overallScore: msmeScoreHistory.overallScore,
+      ratingBand: msmeScoreHistory.ratingBand,
+      createdAt: msmeScoreHistory.createdAt,
+    })
+    .from(msmeScoreHistory)
+    .where(eq(msmeScoreHistory.msmeId, msmeId))
+    .orderBy(msmeScoreHistory.createdAt);
+
+  return rows.map((r) => ({
+    id: r.id,
+    msme_id: r.msmeId,
+    overall_score: r.overallScore,
+    rating_band: r.ratingBand,
+    created_at: r.createdAt.toISOString(),
+  }));
+}
+
+/** The most recent persisted assessment for an MSME, rebuilt as a full Card. */
+export interface LatestScore {
+  id: number;
+  card: Card;
+  memo: string | null;
+}
+
+export async function getLatestScore(
+  msmeId: string,
+): Promise<LatestScore | null> {
+  const [row] = await db
+    .select()
+    .from(msmeScoreHistory)
+    .where(eq(msmeScoreHistory.msmeId, msmeId))
+    // id tie-breaks rows that share a createdAt timestamp, so "latest" is stable.
+    .orderBy(desc(msmeScoreHistory.createdAt), desc(msmeScoreHistory.id))
+    .limit(1);
+  if (!row) return null;
+
+  return {
+    id: row.id,
+    memo: row.memo,
+    card: {
+      msme_id: row.msmeId,
+      overall_score: row.overallScore,
+      rating_band: row.ratingBand,
+      pillars: row.pillars,
+      confidence: row.confidence,
+      repayment: row.repayment,
+      flags: row.flags,
+      forecast: row.forecast,
+    },
+  };
+}
+
+/** Cache a generated memo onto a specific score-history row. */
+export async function setScoreMemo(id: number, memo: string): Promise<void> {
+  await db
+    .update(msmeScoreHistory)
+    .set({ memo })
+    .where(eq(msmeScoreHistory.id, id));
 }
 
 // --- /portfolio aggregation --------------------------------------------------

@@ -14,6 +14,9 @@ import {
   useMe,
   useLogout,
   useAssess,
+  useGetCardHistory,
+  useGenerateCardMemo,
+  getGetCardHistoryQueryKey,
   getMeQueryKey,
   type CardResponse,
 } from "@workspace/api-client-react";
@@ -76,6 +79,7 @@ export default function AssessmentView({
   const [current, setCurrent] = useState<CardResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [recents, setRecents] = useState<RecentEntry[]>([]);
+  const [memo, setMemo] = useState<string | null>(null);
 
   // Cached from the ProtectedRoute wrapper's own useMe() call — no extra
   // network request, react-query dedupes on the shared query key.
@@ -84,7 +88,25 @@ export default function AssessmentView({
   const assessMutation = useAssess();
   const queryClient = useQueryClient();
 
+  // Score trend for the currently-shown MSME (lender-only endpoint).
+  const { data: history } = useGetCardHistory(current?.msme_id ?? "", {
+    query: {
+      queryKey: getGetCardHistoryQueryKey(current?.msme_id ?? ""),
+      enabled: !!current?.msme_id,
+    },
+  });
+
+  const memoMutation = useGenerateCardMemo();
+
   const loading = assessMutation.isPending;
+
+  const handleGenerateMemo = () => {
+    if (!current) return;
+    memoMutation.mutate(
+      { msmeId: current.msme_id },
+      { onSuccess: (r) => setMemo(r.memo) },
+    );
+  };
 
   const handleLogout = async () => {
     await logoutMutation.mutateAsync();
@@ -114,7 +136,12 @@ export default function AssessmentView({
       {
         onSuccess: (card) => {
           setCurrent(card);
+          setMemo(null); // memo is per-assessment; clear it for the new card
           pushRecent(card);
+          // A fresh assessment adds a history row — refetch the trend.
+          queryClient.invalidateQueries({
+            queryKey: getGetCardHistoryQueryKey(card.msme_id),
+          });
         },
         onError: (err) => {
           setCurrent(null);
@@ -134,6 +161,7 @@ export default function AssessmentView({
     setQuery("");
     setCurrent(null);
     setError(null);
+    setMemo(null);
   };
 
   const handleSelectRecent = (msmeId: string) => {
@@ -263,7 +291,13 @@ export default function AssessmentView({
                       </div>
                     </motion.div>
                   ) : (
-                    <ScoreCard card={current} />
+                    <ScoreCard
+                      card={current}
+                      history={history}
+                      memo={memo ?? undefined}
+                      memoPending={memoMutation.isPending}
+                      onGenerateMemo={handleGenerateMemo}
+                    />
                   )}
                 </AnimatePresence>
               </main>

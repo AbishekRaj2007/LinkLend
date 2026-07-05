@@ -54,6 +54,18 @@ export interface CardResponse {
   forecast: Forecast;
 }
 
+export interface MemoResponse {
+  memo: string;
+}
+
+export interface ScoreHistoryEntry {
+  id: number;
+  msme_id: string;
+  overall_score: number;
+  rating_band: string;
+  created_at: string;
+}
+
 export interface ScoreBucket {
   bucket: string;
   count: number;

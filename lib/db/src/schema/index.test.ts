@@ -7,6 +7,7 @@ import {
   epfo,
   obligations,
   msmeCreditScores,
+  msmeScoreHistory,
   users,
   refreshTokens,
   insertMsmeMasterSchema,
@@ -15,6 +16,7 @@ import {
   insertEpfoSchema,
   insertObligationsSchema,
   insertMsmeCreditScoresSchema,
+  insertMsmeScoreHistorySchema,
   insertUserSchema,
   insertRefreshTokenSchema,
 } from "./index";
@@ -99,6 +101,24 @@ describe("schema tables", () => {
         "creditUtilizationPct",
         "riskCategory",
         "flags",
+      ],
+    },
+    {
+      name: "msme_score_history",
+      table: msmeScoreHistory,
+      columns: [
+        "id",
+        "msmeId",
+        "overallScore",
+        "ratingBand",
+        "pillars",
+        "confidence",
+        "repayment",
+        "flags",
+        "forecast",
+        "assessedByUserId",
+        "memo",
+        "createdAt",
       ],
     },
     {
@@ -227,6 +247,24 @@ describe("insert schemas", () => {
     expect(insertMsmeCreditScoresSchema.safeParse(missing).success).toBe(
       false,
     );
+  });
+
+  it("insertMsmeScoreHistorySchema parses a valid row and rejects a missing required field", () => {
+    const valid = {
+      msmeId: "MSME-0001",
+      overallScore: 72,
+      ratingBand: "Moderate Risk",
+      pillars: [{ name: "Business Vitality", score: 68, reasons: ["Steady turnover"] }],
+      confidence: { level: "High", raise_by: "" },
+      repayment: { sustainable_emi: 45000, basis: "30% of net inflow" },
+      flags: { consistency_alert: false, detail: "No material inconsistencies." },
+      forecast: { months: ["2026-07"], projected_net_surplus: [120000] },
+      assessedByUserId: 1,
+    };
+    expect(insertMsmeScoreHistorySchema.parse(valid)).toEqual(valid);
+
+    const { overallScore: _omit, ...missing } = valid;
+    expect(insertMsmeScoreHistorySchema.safeParse(missing).success).toBe(false);
   });
 
   it("insertUserSchema parses a valid row and rejects a missing required field", () => {

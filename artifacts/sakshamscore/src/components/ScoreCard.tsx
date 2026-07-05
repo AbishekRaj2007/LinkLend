@@ -9,7 +9,10 @@ import {
   Area,
   AreaChart,
 } from "recharts";
-import { type CardResponse } from "@workspace/api-client-react";
+import {
+  type CardResponse,
+  type ScoreHistoryEntry,
+} from "@workspace/api-client-react";
 import { GaugeArc } from "./Dashboard";
 import { type RecentEntry } from "./Sidebar";
 
@@ -55,6 +58,13 @@ function formatMonth(m: string): string {
   return idx >= 0 && idx < 12 ? MONTH_NAMES[idx] : m;
 }
 
+/** ISO timestamp → "12 Jul", falling back to the raw string. */
+function formatDay(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return `${d.getDate()} ${MONTH_NAMES[d.getMonth()]}`;
+}
+
 function pillarColor(score: number): string {
   if (score >= 75) return "bg-emerald-500";
   if (score >= 60) return "bg-amber-500";
@@ -78,12 +88,31 @@ function Panel({ title, children, className = "" }: { title?: string; children: 
   );
 }
 
-export default function ScoreCard({ card }: { card: CardResponse }) {
+export default function ScoreCard({
+  card,
+  history,
+  memo,
+  memoPending,
+  onGenerateMemo,
+}: {
+  card: CardResponse;
+  history?: ScoreHistoryEntry[];
+  memo?: string;
+  memoPending?: boolean;
+  onGenerateMemo?: () => void;
+}) {
   const tone = toneForBand(card.rating_band);
   const forecastData = card.forecast.months.map((m, i) => ({
     month: formatMonth(m),
     value: card.forecast.projected_net_surplus[i] ?? 0,
   }));
+
+  // A trend only reads as a trend with at least two assessments.
+  const trendData = (history ?? []).map((h) => ({
+    day: formatDay(h.created_at),
+    score: h.overall_score,
+  }));
+  const showTrend = trendData.length >= 2;
 
   return (
     <motion.div
@@ -219,6 +248,59 @@ export default function ScoreCard({ card }: { card: CardResponse }) {
           </Panel>
         </div>
       </div>
+
+      {showTrend && (
+        <Panel title={`Score Trend (${trendData.length} assessments)`}>
+          <div className="h-[150px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={trendData}>
+                <defs>
+                  <linearGradient id="scoreTrend" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
+                    <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fill: "#888", fontSize: 12 }} />
+                <YAxis hide domain={[0, 100]} />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: "rgba(15,15,25,0.9)",
+                    borderColor: "rgba(255,255,255,0.1)",
+                    borderRadius: "8px",
+                  }}
+                  itemStyle={{ color: "#10b981" }}
+                  formatter={(v: number | string) => [`${v}/100`, "Score"]}
+                />
+                <Area type="monotone" dataKey="score" stroke="#10b981" strokeWidth={2} fillOpacity={1} fill="url(#scoreTrend)" />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </Panel>
+      )}
+
+      {onGenerateMemo && (
+        <Panel title="AI Credit Memo">
+          {memo ? (
+            <p className="text-sm text-white/80 whitespace-pre-wrap leading-relaxed">
+              {memo}
+            </p>
+          ) : (
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <p className="text-xs text-white/50 max-w-md">
+                Generate a plain-English underwriting memo from this scorecard. The
+                narrative only explains the score — it never changes it.
+              </p>
+              <button
+                onClick={onGenerateMemo}
+                disabled={memoPending}
+                className="shrink-0 inline-flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 disabled:opacity-60 text-white px-4 py-2 rounded-lg text-sm font-semibold tracking-wide transition-colors"
+              >
+                {memoPending ? "Generating…" : "Generate memo"}
+              </button>
+            </div>
+          )}
+        </Panel>
+      )}
 
       <p className="text-[11px] text-white/30 text-center pt-2">
         Reason codes are coefficient × feature contributions — not SHAP. Scored on synthetic MSME data.

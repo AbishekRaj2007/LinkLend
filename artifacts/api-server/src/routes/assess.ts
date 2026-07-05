@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { AssessBody, AssessResponse } from "@workspace/api-zod";
-import { computeCard, cacheCard } from "../data/store";
+import { computeCard, cacheCard, saveScoreHistory } from "../data/store";
 import { requireAuth, requireRole } from "../middlewares/requireAuth";
 
 const router: IRouter = Router();
@@ -19,6 +19,7 @@ router.post("/assess", requireAuth, requireRole("lender"), async (req, res) => {
   }
 
   cacheCard(card);
+  await saveScoreHistory(card, req.user?.id ?? null);
   res.json(AssessResponse.parse(card));
 });
 

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import request from "supertest";
-import { GetCardResponse } from "@workspace/api-zod";
+import { GetCardResponse, GetCardHistoryResponse } from "@workspace/api-zod";
 import app from "../app";
 import { signAccessToken } from "../lib/tokens";
 
@@ -49,6 +49,52 @@ describe("GET /api/card/:msme_id", () => {
   it("returns 403 for a borrower session", async () => {
     const res = await request(app)
       .get(`/api/card/${KNOWN_ID}`)
+      .set("Cookie", borrowerCookie());
+    expect(res.status).toBe(403);
+  });
+});
+
+describe("GET /api/card/:msme_id/history", () => {
+  it("records a history entry on /assess and returns it, newest data reflecting that score", async () => {
+    const assessed = await request(app)
+      .post("/api/assess")
+      .set("Cookie", lenderCookie())
+      .send({ msme_id: KNOWN_ID });
+    expect(assessed.status).toBe(200);
+
+    const res = await request(app)
+      .get(`/api/card/${KNOWN_ID}/history`)
+      .set("Cookie", lenderCookie());
+
+    expect(res.status).toBe(200);
+    expect(() => GetCardHistoryResponse.parse(res.body)).not.toThrow();
+    expect(Array.isArray(res.body)).toBe(true);
+    expect(res.body.length).toBeGreaterThan(0);
+
+    for (const entry of res.body) {
+      expect(entry.msme_id).toBe(KNOWN_ID);
+    }
+    // History is oldest-first, so the last entry is the assessment we just ran.
+    const latest = res.body[res.body.length - 1];
+    expect(latest.overall_score).toBe(assessed.body.overall_score);
+  });
+
+  it("returns an empty array for an MSME that was never assessed", async () => {
+    const res = await request(app)
+      .get("/api/card/MSME-001999/history")
+      .set("Cookie", lenderCookie());
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual([]);
+  });
+
+  it("returns 401 without a session", async () => {
+    const res = await request(app).get(`/api/card/${KNOWN_ID}/history`);
+    expect(res.status).toBe(401);
+  });
+
+  it("returns 403 for a borrower session", async () => {
+    const res = await request(app)
+      .get(`/api/card/${KNOWN_ID}/history`)
       .set("Cookie", borrowerCookie());
     expect(res.status).toBe(403);
   });

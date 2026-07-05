@@ -26,7 +26,9 @@ import type {
   ErrorResponse,
   HealthStatus,
   LoginRequest,
+  MemoResponse,
   PortfolioResponse,
+  ScoreHistoryEntry,
   SignupRequest
 } from './api.schemas';
 
@@ -283,6 +285,155 @@ export function useGetCard<TData = Awaited<ReturnType<typeof getCard>>, TError =
 
 
 
+
+export const getGetCardHistoryUrl = (msmeId: string,) => {
+
+
+
+
+  return `/api/card/${msmeId}/history`
+}
+
+/**
+ * Return every persisted assessment for an MSME, oldest first, for a score trend.
+ * @summary Get an MSME's score history
+ */
+export const getCardHistory = async (msmeId: string, options?: RequestInit): Promise<ScoreHistoryEntry[]> => {
+
+  return customFetch<ScoreHistoryEntry[]>(getGetCardHistoryUrl(msmeId),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetCardHistoryQueryKey = (msmeId: string,) => {
+    return [
+    `/api/card/${msmeId}/history`
+    ] as const;
+    }
+
+
+export const getGetCardHistoryQueryOptions = <TData = Awaited<ReturnType<typeof getCardHistory>>, TError = ErrorType<ErrorResponse>>(msmeId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCardHistory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetCardHistoryQueryKey(msmeId);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCardHistory>>> = ({ signal }) => getCardHistory(msmeId, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: msmeId !== null && msmeId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCardHistory>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetCardHistoryQueryResult = NonNullable<Awaited<ReturnType<typeof getCardHistory>>>
+export type GetCardHistoryQueryError = ErrorType<ErrorResponse>
+
+
+/**
+ * @summary Get an MSME's score history
+ */
+
+export function useGetCardHistory<TData = Awaited<ReturnType<typeof getCardHistory>>, TError = ErrorType<ErrorResponse>>(
+ msmeId: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCardHistory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetCardHistoryQueryOptions(msmeId,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGenerateCardMemoUrl = (msmeId: string,) => {
+
+
+
+
+  return `/api/card/${msmeId}/memo`
+}
+
+/**
+ * Return a plain-English underwriting memo for the MSME's most recent assessment. Generated once via Groq and cached; repeat calls return the cached memo. The MSME must have been assessed first.
+ * @summary Generate (or fetch) an AI credit memo
+ */
+export const generateCardMemo = async (msmeId: string, options?: RequestInit): Promise<MemoResponse> => {
+
+  return customFetch<MemoResponse>(getGenerateCardMemoUrl(msmeId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getGenerateCardMemoMutationOptions = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof generateCardMemo>>, TError,{msmeId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof generateCardMemo>>, TError,{msmeId: string}, TContext> => {
+
+const mutationKey = ['generateCardMemo'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof generateCardMemo>>, {msmeId: string}> = (props) => {
+          const {msmeId} = props ?? {};
+
+          return  generateCardMemo(msmeId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type GenerateCardMemoMutationResult = NonNullable<Awaited<ReturnType<typeof generateCardMemo>>>
+
+    export type GenerateCardMemoMutationError = ErrorType<ErrorResponse>
+
+    /**
+ * @summary Generate (or fetch) an AI credit memo
+ */
+export const useGenerateCardMemo = <TError = ErrorType<ErrorResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof generateCardMemo>>, TError,{msmeId: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof generateCardMemo>>,
+        TError,
+        {msmeId: string},
+        TContext
+      > => {
+      return useMutation(getGenerateCardMemoMutationOptions(options));
+    }
 
 export const getGetPortfolioUrl = () => {
 

@@ -102,6 +102,79 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
+  /card/{msme_id}/history:
+    get:
+      operationId: getCardHistory
+      tags: [scoring]
+      summary: Get an MSME's score history
+      description: Return every persisted assessment for an MSME, oldest first, for a score trend.
+      parameters:
+        - name: msme_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The MSME's score history (possibly empty)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ScoreHistoryEntry"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Authenticated user is not a lender
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+  /card/{msme_id}/memo:
+    post:
+      operationId: generateCardMemo
+      tags: [scoring]
+      summary: Generate (or fetch) an AI credit memo
+      description: >-
+        Return a plain-English underwriting memo for the MSME's most recent
+        assessment. Generated once via Groq and cached; repeat calls return the
+        cached memo. The MSME must have been assessed first.
+      parameters:
+        - name: msme_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The credit memo
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MemoResponse"
+        "401":
+          description: Not authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "403":
+          description: Authenticated user is not a lender
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "404":
+          description: The MSME has not been assessed yet
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
   /portfolio:
     get:
       operationId: getPortfolio
@@ -373,6 +446,32 @@ components:
         - repayment
         - flags
         - forecast
+    MemoResponse:
+      type: object
+      properties:
+        memo:
+          type: string
+      required:
+        - memo
+    ScoreHistoryEntry:
+      type: object
+      properties:
+        id:
+          type: integer
+        msme_id:
+          type: string
+        overall_score:
+          type: number
+        rating_band:
+          type: string
+        created_at:
+          type: string
+      required:
+        - id
+        - msme_id
+        - overall_score
+        - rating_band
+        - created_at
     ScoreBucket:
       type: object
       properties:

@@ -25,6 +25,7 @@ import {
   boolean,
   real,
   timestamp,
+  jsonb,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
@@ -146,6 +147,53 @@ export type InsertMsmeCreditScores = z.infer<
   typeof insertMsmeCreditScoresSchema
 >;
 export type MsmeCreditScores = typeof msmeCreditScores.$inferSelect;
+
+// ---------------------------------------------------------------------------
+// msme_score_history
+//
+// One row per /assess. Shaped after the scoring engine's `Card` contract (not
+// the bureau-shaped msme_credit_scores, which stays reserved for a future real
+// external-bureau feed) so a lender can see how an MSME's score moved over time.
+// The nested Card sub-objects are stored verbatim as jsonb.
+// ---------------------------------------------------------------------------
+export const msmeScoreHistory = pgTable("msme_score_history", {
+  id: serial("id").primaryKey(),
+  // fk-by-value to msme_master.msme_id
+  msmeId: text("msme_id").notNull(),
+  overallScore: integer("overall_score").notNull(),
+  ratingBand: text("rating_band").notNull(),
+  pillars: jsonb("pillars")
+    .$type<{ name: string; score: number; reasons: string[] }[]>()
+    .notNull(),
+  confidence: jsonb("confidence")
+    .$type<{ level: string; raise_by: string }>()
+    .notNull(),
+  repayment: jsonb("repayment")
+    .$type<{ sustainable_emi: number; basis: string }>()
+    .notNull(),
+  flags: jsonb("flags")
+    .$type<{ consistency_alert: boolean; detail: string }>()
+    .notNull(),
+  forecast: jsonb("forecast")
+    .$type<{ months: string[]; projected_net_surplus: number[] }>()
+    .notNull(),
+  // fk-by-value to users.id; the lender who ran the assessment (null if unknown)
+  assessedByUserId: integer("assessed_by_user_id"),
+  // AI-generated underwriting narrative for this assessment; null until requested
+  // (generated once on demand via /card/:id/memo, then cached here).
+  memo: text("memo"),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+export const insertMsmeScoreHistorySchema = createInsertSchema(
+  msmeScoreHistory,
+).omit({ id: true, createdAt: true });
+export type InsertMsmeScoreHistory = z.infer<
+  typeof insertMsmeScoreHistorySchema
+>;
+export type MsmeScoreHistory = typeof msmeScoreHistory.$inferSelect;
 
 // ---------------------------------------------------------------------------
 // users
