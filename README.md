@@ -7,7 +7,7 @@ bank transactions, EPFO payroll and existing obligations into an explainable
 ## Run & Operate
 
 - `pnpm install` — install all workspace dependencies
-- `pnpm run dev` — run the frontend (port 5173) and API server (port 5000) together
+- `pnpm run dev` — run the frontend (port 4174) and API server (port 5000) together
 - `pnpm run dev:web` — run only the frontend (`sakshamscore`)
 - `pnpm run dev:api` — run only the API server
 - `pnpm run typecheck` — full typecheck across all packages
