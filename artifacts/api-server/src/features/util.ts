@@ -1,105 +1,77 @@
-import type { InsertTransactions } from "@workspace/db/schema";
+// Small numeric helpers shared across feature computations. All are total
+// (never throw, never return NaN/Infinity) so thin-file inputs degrade to finite
+// values rather than propagating garbage into the models.
 
-/** Sum, tolerant of an empty array. */
-export function sum(xs: number[]): number {
-  let s = 0;
-  for (const x of xs) s += x;
-  return s;
+export function clamp(x: number, lo: number, hi: number): number {
+  if (Number.isNaN(x)) return lo;
+  return Math.min(hi, Math.max(lo, x));
 }
 
-/** Arithmetic mean; 0 for an empty array. */
-export function mean(xs: number[]): number {
-  return xs.length === 0 ? 0 : sum(xs) / xs.length;
-}
-
-/** Population standard deviation; 0 when fewer than 2 samples. */
-export function std(xs: number[]): number {
-  if (xs.length < 2) return 0;
-  const m = mean(xs);
-  let acc = 0;
-  for (const x of xs) acc += (x - m) * (x - m);
-  return Math.sqrt(acc / xs.length);
-}
-
-/**
- * Coefficient of variation (std / |mean|). Always finite and non-negative:
- * returns 0 when the mean is ~0 or there are too few samples, and is capped
- * so a near-zero mean can never produce a runaway value.
- */
-export function cv(xs: number[]): number {
-  if (xs.length < 2) return 0;
-  const denom = Math.abs(mean(xs));
-  if (denom < 1e-9) return 0;
-  const v = std(xs) / denom;
-  return Number.isFinite(v) ? clamp(v, 0, 10) : 0;
-}
-
-/** Division that never yields NaN/Infinity — returns `fallback` on divide-by-~0. */
+/** a / b with a guarded denominator; returns `fallback` when b ~ 0. */
 export function safeDiv(a: number, b: number, fallback = 0): number {
-  if (!Number.isFinite(a) || !Number.isFinite(b) || Math.abs(b) < 1e-12) {
-    return fallback;
-  }
+  if (!(Math.abs(b) > 1e-9)) return fallback;
   const r = a / b;
   return Number.isFinite(r) ? r : fallback;
 }
 
-export function clamp(x: number, lo: number, hi: number): number {
-  return Math.max(lo, Math.min(hi, x));
+export function mean(xs: number[]): number {
+  if (xs.length === 0) return 0;
+  return xs.reduce((s, x) => s + x, 0) / xs.length;
 }
 
-export function finiteOr(x: number, fallback = 0): number {
-  return Number.isFinite(x) ? x : fallback;
+export function std(xs: number[]): number {
+  if (xs.length < 2) return 0;
+  const m = mean(xs);
+  const v = xs.reduce((s, x) => s + (x - m) * (x - m), 0) / xs.length;
+  return Math.sqrt(v);
 }
 
-/**
- * Fractional trend of a chronological series: (mean of later half − mean of
- * earlier half) / |mean of earlier half|. Negative = declining. Clamped so it
- * stays finite even when the early period is ~0.
- */
-export function trendRatio(values: number[]): number {
-  if (values.length < 2) return 0;
-  const half = Math.floor(values.length / 2);
-  const first = values.slice(0, half);
-  const second = values.slice(values.length - half);
-  const fm = mean(first);
-  const r = safeDiv(mean(second) - fm, Math.abs(fm), 0);
-  return clamp(finiteOr(r, 0), -10, 10);
-}
-
-/** Inclusive month count between two "YYYY-MM" periods (>= 1). */
-export function monthSpan(a: string, b: string): number {
-  const [ay, am] = a.split("-").map(Number);
-  const [by, bm] = b.split("-").map(Number);
-  return (by - ay) * 12 + (bm - am) + 1;
+/** Coefficient of variation = std / |mean|, non-negative, capped for finiteness. */
+export function cv(xs: number[], cap = 3): number {
+  const m = mean(xs);
+  if (!(Math.abs(m) > 1e-9)) return 0;
+  return clamp(std(xs) / Math.abs(m), 0, cap);
 }
 
 /**
- * Monthly credit/debit totals, in chronological order. Used by the cashflow and
- * obligations pillars so transaction grouping lives in exactly one place.
+ * Ordinary-least-squares slope of `ys` against index 0..n-1, expressed relative
+ * to the series mean so it is scale-free (a "% per period" trend). Clamped.
  */
-export function monthlyCashflow(transactions: InsertTransactions[]): {
-  credit: number[];
-  debit: number[];
-  net: number[];
-} {
-  const sorted = [...transactions].sort((a, b) =>
-    a.date < b.date ? -1 : a.date > b.date ? 1 : 0,
-  );
-  const byMonth = new Map<string, { credit: number; debit: number }>();
-  for (const t of sorted) {
-    const m = t.date.slice(0, 7);
-    const e = byMonth.get(m) ?? { credit: 0, debit: 0 };
-    if (t.direction === "credit") e.credit += t.amount;
-    else e.debit += t.amount;
-    byMonth.set(m, e);
+export function relativeSlope(ys: number[], cap = 1): number {
+  const n = ys.length;
+  if (n < 2) return 0;
+  const xbar = (n - 1) / 2;
+  const ybar = mean(ys);
+  let num = 0;
+  let den = 0;
+  for (let i = 0; i < n; i++) {
+    num += (i - xbar) * (ys[i]! - ybar);
+    den += (i - xbar) * (i - xbar);
   }
-  const credit: number[] = [];
-  const debit: number[] = [];
-  const net: number[] = [];
-  for (const e of byMonth.values()) {
-    credit.push(e.credit);
-    debit.push(e.debit);
-    net.push(e.credit - e.debit);
-  }
-  return { credit, debit, net };
+  const slope = safeDiv(num, den, 0);
+  return clamp(safeDiv(slope, Math.abs(ybar), 0), -cap, cap);
+}
+
+/** Compound growth rate from first to last value over the series length. */
+export function cagr(ys: number[], cap = 2): number {
+  const n = ys.length;
+  if (n < 2) return 0;
+  const first = ys[0]!;
+  const last = ys[n - 1]!;
+  if (!(first > 1e-9) || !(last > 1e-9)) return 0;
+  const periods = n - 1;
+  const r = Math.pow(last / first, 1 / periods) - 1;
+  return clamp(r, -cap, cap);
+}
+
+/** Parse "YYYY-MM" or "YYYY-MM-DD" into a comparable [year, month] pair. */
+export function monthOf(period: string): { year: number; month: number } {
+  const [y, m] = period.split("-");
+  return { year: Number(y) || 0, month: Number(m) || 0 };
+}
+
+/** Chronological key for sorting "YYYY-MM" strings. */
+export function periodKey(period: string): number {
+  const { year, month } = monthOf(period);
+  return year * 12 + month;
 }

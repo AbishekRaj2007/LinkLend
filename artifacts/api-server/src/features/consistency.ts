@@ -1,61 +1,64 @@
-import type {
-  InsertGstReturns,
-  InsertTransactions,
-  InsertEpfo,
-} from "@workspace/db/schema";
-import { sum, clamp, safeDiv } from "./util";
+import type { MsmeBundle } from "../types";
+import { mean, safeDiv } from "./util";
 
-export interface ConsistencyFeatures {
+/**
+ * Cross-source corroboration ratios — the fraud/verification signal that stands
+ * in for collateral. ~1.0 means the sources agree; a low value means the
+ * business's self-declared numbers disagree with what its bank account shows.
+ */
+export interface ConsistencyRatios {
+  /** Bank inflow vs declared GST turnover. Low => turnover inflated on paper. */
   gstToUpiRatio: number;
+  /** Bank payroll outflow vs payroll implied by EPFO headcount. Low => ghost heads. */
   epfoHeadcountToPayrollRatio: number;
 }
 
-/**
- * Assumed average monthly payroll per EPFO-covered employee. This is the same
- * domain assumption the Gate 1 generator uses; it lets us translate EPFO
- * headcount into an expected payroll outflow.
- */
-const ASSUMED_MONTHLY_SALARY = 15000;
+// Rough all-India assumption for "what one EPFO-covered employee costs per month"
+// used only to translate headcount into an expected payroll outflow.
+const ASSUMED_MONTHLY_WAGE = 18000;
 
-// Ratios cap here (keeps them finite/sane); NEUTRAL is used when a corroborating
-// source is entirely absent — we cannot detect an inconsistency, so we do not
-// fire (the gap is instead recorded in the completeness vector).
-const RATIO_CAP = 5;
-const NEUTRAL = 1;
+export function computeConsistency(bundle: MsmeBundle): ConsistencyRatios {
+  // --- gstToUpiRatio -------------------------------------------------------
+  const gstMonths = bundle.gst.length;
+  const avgGstTurnover = gstMonths > 0 ? mean(bundle.gst.map((g) => g.turnover)) : 0;
 
-/**
- * Cross-source consistency. Both features read as coverage ratios: ~1.0 means the
- * two sources agree, and a LOW value (well below 1) means they disagree — this is
- * how fraud "fires" (GST turnover >> UPI inflows, or EPFO headcount >> payroll).
- */
-export function computeConsistency(
-  gst: InsertGstReturns[],
-  transactions: InsertTransactions[],
-  epfo: InsertEpfo[],
-): ConsistencyFeatures {
-  const totalTurnover = sum(gst.map((g) => g.turnover));
-  const totalCredit = sum(
-    transactions.filter((t) => t.direction === "credit").map((t) => t.amount),
-  );
-  const totalPayroll = sum(
-    transactions
-      .filter((t) => t.direction === "debit" && t.category === "payroll")
-      .map((t) => t.amount),
-  );
-  const totalEmployeeMonths = sum(epfo.map((e) => e.employeeCount));
+  const creditByMonth = new Map<string, number>();
+  for (const t of bundle.transactions) {
+    if (t.direction !== "credit") continue;
+    const m = t.date.slice(0, 7);
+    creditByMonth.set(m, (creditByMonth.get(m) ?? 0) + t.amount);
+  }
+  const avgBankInflow =
+    creditByMonth.size > 0 ? mean([...creditByMonth.values()]) : 0;
 
-  // UPI/credit inflows corroborating declared GST turnover.
   const gstToUpiRatio =
-    transactions.length === 0 || totalTurnover <= 0
-      ? NEUTRAL
-      : clamp(safeDiv(totalCredit, totalTurnover, NEUTRAL), 0, RATIO_CAP);
+    gstMonths > 0 && creditByMonth.size > 0
+      ? safeDiv(avgBankInflow, avgGstTurnover, 1)
+      : 1; // no basis to compare -> treat as corroborated (neutral)
 
-  // Observed payroll outflow vs EPFO-headcount-implied payroll.
-  const impliedPayroll = totalEmployeeMonths * ASSUMED_MONTHLY_SALARY;
+  // --- epfoHeadcountToPayrollRatio ----------------------------------------
+  const epfoMonths = bundle.epfo.length;
+  const avgHeadcount =
+    epfoMonths > 0 ? mean(bundle.epfo.map((e) => e.employeeCount)) : 0;
+
+  const payrollByMonth = new Map<string, number>();
+  for (const t of bundle.transactions) {
+    if (t.direction !== "debit") continue;
+    if (t.category !== "payroll") continue;
+    const m = t.date.slice(0, 7);
+    payrollByMonth.set(m, (payrollByMonth.get(m) ?? 0) + t.amount);
+  }
+  const avgPayrollPaid =
+    payrollByMonth.size > 0 ? mean([...payrollByMonth.values()]) : 0;
+  const impliedPayroll = avgHeadcount * ASSUMED_MONTHLY_WAGE;
+
   const epfoHeadcountToPayrollRatio =
-    epfo.length === 0 || transactions.length === 0 || impliedPayroll <= 0
-      ? NEUTRAL
-      : clamp(safeDiv(totalPayroll, impliedPayroll, NEUTRAL), 0, RATIO_CAP);
+    epfoMonths > 0 && payrollByMonth.size > 0 && impliedPayroll > 0
+      ? safeDiv(avgPayrollPaid, impliedPayroll, 1)
+      : 1;
 
-  return { gstToUpiRatio, epfoHeadcountToPayrollRatio };
+  return {
+    gstToUpiRatio: Number(gstToUpiRatio.toFixed(4)),
+    epfoHeadcountToPayrollRatio: Number(epfoHeadcountToPayrollRatio.toFixed(4)),
+  };
 }

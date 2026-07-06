@@ -1,56 +1,37 @@
-import type { CompletenessVector } from "../features";
+import type { Completeness } from "../features/completeness";
 
-export interface ConfidenceResult {
-  level: "High" | "Medium" | "Low";
-  raiseBy: string;
+export type ConfidenceLevel = "Low" | "Medium" | "High";
+
+export interface Confidence {
+  level: ConfidenceLevel;
+  coverageScore: number;
+  /** Concrete next step that would raise confidence, or null if already High. */
+  raiseBy: string | null;
 }
 
-// All four sources considered; ordered by how much each lifts assessment quality.
-const SOURCE_PRIORITY = ["gst", "transactions", "epfo", "obligations"] as const;
-
-const SOURCE_ACTION: Record<string, string> = {
-  gst: "Adding GST filing history",
-  transactions: "Linking bank transaction data",
-  epfo: "Adding EPFO contribution records",
-  obligations: "Adding existing-obligation records",
-};
-
 /**
- * Map a completeness vector to a confidence level with clear thresholds:
- *   High   — all 4 sources present AND >= 6 months of history
- *   Low    — 2+ sources missing (<= 2 present) OR < 3 months of history
- *   Medium — everything in between (one source missing, or 3-5 months)
- *
- * `raiseBy` names the single most impactful missing input.
+ * Map data completeness (not just model accuracy) to a confidence level with an
+ * actionable next step. A thin file becomes a to-do list rather than a rejection.
  */
-export function mapCompletenessToConfidence(
-  cv: CompletenessVector,
-): ConfidenceResult {
-  const present = cv.sourcesPresent.length;
-  const months = cv.monthsOfHistory;
+export function computeConfidence(c: Completeness): Confidence {
+  const level: ConfidenceLevel =
+    c.coverageScore >= 0.8 ? "High" : c.coverageScore >= 0.55 ? "Medium" : "Low";
 
-  const level: ConfidenceResult["level"] =
-    present === 4 && months >= 6
-      ? "High"
-      : present <= 2 || months < 3
-        ? "Low"
-        : "Medium";
-
-  const nextLevel = level === "Low" ? "Medium" : "High";
-  const missing = SOURCE_PRIORITY.filter(
-    (s) => !cv.sourcesPresent.includes(s),
-  );
-
-  let raiseBy: string;
-  if (missing.length > 0) {
-    raiseBy = `${SOURCE_ACTION[missing[0]]} would raise confidence to ${nextLevel}.`;
-  } else if (months < 6) {
-    // All sources present but history is short.
-    const reachable = months >= 5 ? "High" : "Medium";
-    raiseBy = `One more GST filing cycle would raise confidence to ${reachable}.`;
-  } else {
-    raiseBy = "All key inputs present — confidence is already at its maximum.";
+  let raiseBy: string | null = null;
+  if (level !== "High") {
+    if (!c.hasEpfo) {
+      raiseBy = "Adding EPFO contribution records would raise confidence.";
+    } else if (!c.hasGst) {
+      raiseBy = "Adding GST return filings would raise confidence.";
+    } else if (!c.hasTransactions) {
+      raiseBy = "Linking a bank statement feed would raise confidence.";
+    } else if (Math.max(c.gstMonths, c.txnMonths) < 12) {
+      raiseBy =
+        "Providing a longer history (12+ months) would raise confidence.";
+    } else if (!c.hasObligations) {
+      raiseBy = "Adding existing-obligation records would raise confidence.";
+    }
   }
 
-  return { level, raiseBy };
+  return { level, coverageScore: c.coverageScore, raiseBy };
 }

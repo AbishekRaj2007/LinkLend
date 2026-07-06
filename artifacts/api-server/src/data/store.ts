@@ -7,63 +7,112 @@ import {
   epfo,
   obligations,
   msmeScoreHistory,
-  type InsertTransactions,
   type MsmeMaster,
 } from "@workspace/db";
-import {
-  groupRawByMsme,
-  computeFeatures,
-  type RawSourceData,
-} from "../features";
-import {
-  assembleCard,
-  scoreMsme,
-  getModels,
-  type Card,
-  type FeatureSnapshot,
-} from "../scoring";
+import type {
+  MsmeBundle,
+  MsmeMasterRecord,
+  GstReturnRecord,
+  TransactionRecord,
+  EpfoRecord,
+  ObligationRecord,
+} from "../types";
+import { assembleCard, type Card } from "../scoring";
 
-/** Point fetch: one MSME's rows across all five source tables, or undefined if unknown. */
-export async function getRaw(id: string): Promise<RawSourceData | undefined> {
-  const [master] = await db
-    .select()
-    .from(msmeMaster)
-    .where(eq(msmeMaster.msmeId, id))
-    .limit(1);
-  if (!master) return undefined;
-
-  const [gst, txns, epfoRows, obligationRows] = await Promise.all([
-    db.select().from(gstReturns).where(eq(gstReturns.msmeId, id)),
-    db.select().from(transactions).where(eq(transactions.msmeId, id)),
-    db.select().from(epfo).where(eq(epfo.msmeId, id)),
-    db.select().from(obligations).where(eq(obligations.msmeId, id)),
-  ]);
-
+function toMasterRecord(m: MsmeMaster): MsmeMasterRecord {
   return {
-    master,
-    gstReturns: gst,
-    transactions: txns,
-    epfo: epfoRows,
-    obligations: obligationRows,
+    msmeId: m.msmeId,
+    udyamId: m.udyamId,
+    gstin: m.gstin,
+    sector: m.sector,
+    region: m.region,
+    vintageMonths: m.vintageMonths,
+    ntcNtbFlag: m.ntcNtbFlag,
+    latentHealth: m.latentHealth,
+    outcomeLabel: m.outcomeLabel,
   };
 }
 
-interface AllRaw {
+export async function listMsmeIds(): Promise<string[]> {
+  const rows = await db.select({ msmeId: msmeMaster.msmeId }).from(msmeMaster);
+  return rows.map((r) => r.msmeId);
+}
+
+/** Point fetch: one MSME's bundle across all five source tables, or null if unknown. */
+export async function loadBundle(msmeId: string): Promise<MsmeBundle | null> {
+  const [master] = await db
+    .select()
+    .from(msmeMaster)
+    .where(eq(msmeMaster.msmeId, msmeId))
+    .limit(1);
+  if (!master) return null;
+
+  const [gstRows, txnRows, epfoRows, obRows] = await Promise.all([
+    db.select().from(gstReturns).where(eq(gstReturns.msmeId, msmeId)),
+    db.select().from(transactions).where(eq(transactions.msmeId, msmeId)),
+    db.select().from(epfo).where(eq(epfo.msmeId, msmeId)),
+    db.select().from(obligations).where(eq(obligations.msmeId, msmeId)),
+  ]);
+
+  const gst: GstReturnRecord[] = gstRows.map((g) => ({
+    period: g.period,
+    turnover: g.turnover,
+    taxPaid: g.taxPaid,
+    invoiceCount: g.invoiceCount,
+    filingDate: g.filingDate,
+    dueDate: g.dueDate,
+  }));
+
+  const txns: TransactionRecord[] = txnRows.map((t) => ({
+    date: t.date,
+    amount: t.amount,
+    direction: t.direction === "credit" ? "credit" : "debit",
+    counterpartyType: t.counterpartyType,
+    category: t.category,
+    runningBalance: t.runningBalance,
+  }));
+
+  const epfoRecs: EpfoRecord[] = epfoRows.map((e) => ({
+    period: e.period,
+    employeeCount: e.employeeCount,
+    contributionAmount: e.contributionAmount,
+    paidOnTime: e.paidOnTime,
+  }));
+
+  const ob = obRows[0];
+  const obligation: ObligationRecord | null = ob
+    ? {
+        existingEmis: ob.existingEmis,
+        monthlyObligation: ob.monthlyObligation,
+        bounceCount: ob.bounceCount,
+      }
+    : null;
+
+  return {
+    master: toMasterRecord(master),
+    gst,
+    transactions: txns,
+    epfo: epfoRecs,
+    obligation,
+  };
+}
+
+interface AllBundles {
   masters: MsmeMaster[];
-  rawById: Map<string, RawSourceData>;
+  bundleById: Map<string, MsmeBundle>;
 }
 
 // The full five-table pull is ~175k rows across every MSME — fine for a
 // one-time load, too slow to repeat on every /portfolio hit (each of these
 // selects alone can take tens of seconds over a pooled connection). Cache it
 // once per process, same freshness semantics the old in-memory dataset had.
-let allRawCache: AllRaw | null = null;
+let allBundlesCache: AllBundles | null = null;
 
-/** Bulk fetch: every MSME's master row plus its grouped source rows (for /portfolio and validation). */
-export async function getAllRaw(): Promise<AllRaw> {
-  if (allRawCache) return allRawCache;
+/** Bulk fetch: every MSME's master row plus its grouped bundle (for /portfolio and validation). */
+export async function getAllBundles(): Promise<AllBundles> {
+  if (allBundlesCache) return allBundlesCache;
 
-  const [masters, gst, txns, epfoRows, obligationRows] = await Promise.all([
+  const [masters, gstRows, txnRows, epfoRows, obRows] = await Promise.all([
     db.select().from(msmeMaster),
     db.select().from(gstReturns),
     db.select().from(transactions),
@@ -71,39 +120,75 @@ export async function getAllRaw(): Promise<AllRaw> {
     db.select().from(obligations),
   ]);
 
-  const rawById = groupRawByMsme({
-    msmeMaster: masters,
-    gstReturns: gst,
-    transactions: txns,
-    epfo: epfoRows,
-    obligations: obligationRows,
-  });
-
-  allRawCache = { masters, rawById };
-  return allRawCache;
-}
-
-/** Monthly net-inflow snapshots from a transaction history (for the forecast). */
-export function monthlySnapshots(
-  transactions: InsertTransactions[],
-): FeatureSnapshot[] {
-  const byMonth = new Map<string, number>();
-  for (const t of transactions) {
-    const m = t.date.slice(0, 7);
-    const signed = t.direction === "credit" ? t.amount : -t.amount;
-    byMonth.set(m, (byMonth.get(m) ?? 0) + signed);
+  const gstById = new Map<string, GstReturnRecord[]>();
+  for (const g of gstRows) {
+    const arr = gstById.get(g.msmeId) ?? [];
+    arr.push({
+      period: g.period,
+      turnover: g.turnover,
+      taxPaid: g.taxPaid,
+      invoiceCount: g.invoiceCount,
+      filingDate: g.filingDate,
+      dueDate: g.dueDate,
+    });
+    gstById.set(g.msmeId, arr);
   }
-  return [...byMonth.entries()]
-    .sort((a, b) => (a[0] < b[0] ? -1 : 1))
-    .map(([month, net]) => ({ month, avgMonthlyNetInflow: net }));
+
+  const txnById = new Map<string, TransactionRecord[]>();
+  for (const t of txnRows) {
+    const arr = txnById.get(t.msmeId) ?? [];
+    arr.push({
+      date: t.date,
+      amount: t.amount,
+      direction: t.direction === "credit" ? "credit" : "debit",
+      counterpartyType: t.counterpartyType,
+      category: t.category,
+      runningBalance: t.runningBalance,
+    });
+    txnById.set(t.msmeId, arr);
+  }
+
+  const epfoById = new Map<string, EpfoRecord[]>();
+  for (const e of epfoRows) {
+    const arr = epfoById.get(e.msmeId) ?? [];
+    arr.push({
+      period: e.period,
+      employeeCount: e.employeeCount,
+      contributionAmount: e.contributionAmount,
+      paidOnTime: e.paidOnTime,
+    });
+    epfoById.set(e.msmeId, arr);
+  }
+
+  const obligationById = new Map<string, ObligationRecord>();
+  for (const o of obRows) {
+    obligationById.set(o.msmeId, {
+      existingEmis: o.existingEmis,
+      monthlyObligation: o.monthlyObligation,
+      bounceCount: o.bounceCount,
+    });
+  }
+
+  const bundleById = new Map<string, MsmeBundle>();
+  for (const m of masters) {
+    bundleById.set(m.msmeId, {
+      master: toMasterRecord(m),
+      gst: gstById.get(m.msmeId) ?? [],
+      transactions: txnById.get(m.msmeId) ?? [],
+      epfo: epfoById.get(m.msmeId) ?? [],
+      obligation: obligationById.get(m.msmeId) ?? null,
+    });
+  }
+
+  allBundlesCache = { masters, bundleById };
+  return allBundlesCache;
 }
 
 /** Full scorecard for one MSME, or null if the id is unknown. */
 export async function computeCard(id: string): Promise<Card | null> {
-  const raw = await getRaw(id);
-  if (!raw) return null;
-  const f = computeFeatures(id, raw);
-  return assembleCard(id, f, monthlySnapshots(raw.transactions));
+  const bundle = await loadBundle(id);
+  if (!bundle) return null;
+  return assembleCard(bundle);
 }
 
 // --- /card cache -------------------------------------------------------------
@@ -238,8 +323,7 @@ export interface Portfolio {
 
 /** Aggregate scores across every MSME currently in the store. */
 export async function buildPortfolio(): Promise<Portfolio> {
-  const { masters, rawById } = await getAllRaw();
-  const models = getModels();
+  const { masters, bundleById } = await getAllBundles();
 
   const bucketCounts = new Map<string, number>(
     SCORE_BUCKETS.map((b) => [b.label, 0]),
@@ -248,8 +332,8 @@ export async function buildPortfolio(): Promise<Portfolio> {
   let pdSum = 0;
 
   for (const m of masters) {
-    const raw = rawById.get(m.msmeId)!;
-    const score = scoreMsme(computeFeatures(m.msmeId, raw), models).overall_score;
+    const bundle = bundleById.get(m.msmeId)!;
+    const score = assembleCard(bundle).overall_score;
 
     const b = bucketFor(score);
     bucketCounts.set(b, (bucketCounts.get(b) ?? 0) + 1);

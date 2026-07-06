@@ -2,7 +2,6 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "path";
-import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
 
 const rawPort = process.env.PORT;
 
@@ -28,24 +27,7 @@ if (!basePath) {
 
 export default defineConfig({
   base: basePath,
-  plugins: [
-    react(),
-    tailwindcss(),
-    runtimeErrorOverlay(),
-    ...(process.env.NODE_ENV !== "production" &&
-    process.env.REPL_ID !== undefined
-      ? [
-          await import("@replit/vite-plugin-cartographer").then((m) =>
-            m.cartographer({
-              root: path.resolve(import.meta.dirname, ".."),
-            }),
-          ),
-          await import("@replit/vite-plugin-dev-banner").then((m) =>
-            m.devBanner(),
-          ),
-        ]
-      : []),
-  ],
+  plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
       "@": path.resolve(import.meta.dirname, "src"),
@@ -66,11 +48,11 @@ export default defineConfig({
     fs: {
       strict: true,
     },
+    // Proxy API calls to the Express server (dev runs on port 5000) so the
+    // browser can use relative `/api` paths without CORS or env config.
     proxy: {
-      // Keeps the frontend and api-server same-origin in dev, so the
-      // browser sends/receives auth cookies without any CORS involved.
       "/api": {
-        target: `http://localhost:${process.env.API_PORT ?? "5000"}`,
+        target: process.env.API_PROXY_TARGET ?? "http://localhost:5000",
         changeOrigin: true,
       },
     },

@@ -1,63 +1,100 @@
-import type { FeatureRecord } from "../features";
-import { PILLARS, featureVector } from "./pillars";
-import { getModels, type ModelBundle, type PillarModel } from "./train";
-import { sigmoid, dot, standardizeRow } from "./logistic";
+import type { MsmeBundle } from "../types";
+import { computeFeatures, type FeatureRecord } from "../features";
+import {
+  PILLARS,
+  PILLAR_ORDER,
+  type PillarId,
+} from "../features/catalog";
+import { MODEL_ARTIFACT } from "./model-artifact.generated";
+import { evaluatePillar, type ModelArtifact } from "./model";
+import {
+  pillarReasons,
+  overallAdverseReasons,
+  type ReasonCode,
+} from "./explain";
+import { computeConfidence, type Confidence } from "./confidence";
+import { consistencyFlag } from "./consistency";
+import { sustainableEmi, type RepaymentCapacity } from "./repayment";
+import type { ConsistencyRatios } from "../features/consistency";
+
+export type RatingBand = "Low Risk" | "Moderate Risk" | "High Risk";
 
 export interface PillarScore {
-  name: string;
-  score: number;
+  id: PillarId;
+  label: string;
+  weight: number;
+  subScore: number;
+  probability: number;
+  reasons: ReasonCode[];
 }
 
-export interface ScoreResult {
+export interface Scorecard {
+  msmeId: string;
+  overallScore: number;
+  ratingBand: RatingBand;
   pillars: PillarScore[];
-  overall_score: number;
-  rating_band: string;
+  reasons: ReasonCode[];
+  confidence: Confidence;
+  flags: { consistencyAlert: boolean; detail: string | null };
+  consistency: ConsistencyRatios;
+  repayment: RepaymentCapacity;
 }
 
-/**
- * Rating bands from the overall 0-100 score (documented fixed cutoffs):
- *   >= 75  Low Risk
- *   60-74  Moderate Risk
- *   < 60   High Risk
- */
-export function ratingBand(overall: number): string {
+export function ratingBand(overall: number): RatingBand {
   if (overall >= 75) return "Low Risk";
   if (overall >= 60) return "Moderate Risk";
   return "High Risk";
 }
 
-/** Calibrated P(non-default) for one pillar, as a 0-100 sub-score. */
-export function pillarSubScore(model: PillarModel, f: FeatureRecord): number {
-  const x = featureVector(f, model.featureNames);
-  const xstd = standardizeRow(x, model.means, model.stds);
-  const z = dot(model.weights, xstd) + model.bias;
-  const prob = model.calibration
-    ? sigmoid(model.calibration.a * z + model.calibration.b)
-    : sigmoid(z);
-  return Math.max(0, Math.min(100, Math.round(prob * 100)));
+/** Score a precomputed feature record against a given model artifact. */
+export function scoreFeatures(
+  fr: FeatureRecord,
+  repayment: RepaymentCapacity,
+  artifact: ModelArtifact = MODEL_ARTIFACT,
+): Scorecard {
+  const pillars: PillarScore[] = [];
+  const reasonsByPillar: ReasonCode[][] = [];
+  let weightedSum = 0;
+
+  for (const id of PILLAR_ORDER) {
+    const meta = PILLARS[id];
+    const model = artifact.pillars[id];
+    const evalr = evaluatePillar(model, fr.features);
+    const reasons = pillarReasons(model, evalr);
+    reasonsByPillar.push(reasons);
+    weightedSum += meta.weight * evalr.subScore;
+    pillars.push({
+      id,
+      label: meta.label,
+      weight: meta.weight,
+      subScore: evalr.subScore,
+      probability: Number(evalr.probability.toFixed(4)),
+      reasons,
+    });
+  }
+
+  const overallScore = Math.min(100, Math.max(0, Math.round(weightedSum)));
+  const flag = consistencyFlag(fr.consistency);
+
+  return {
+    msmeId: fr.msmeId,
+    overallScore,
+    ratingBand: ratingBand(overallScore),
+    pillars,
+    reasons: overallAdverseReasons(reasonsByPillar),
+    confidence: computeConfidence(fr.completeness),
+    flags: { consistencyAlert: flag.alert, detail: flag.detail },
+    consistency: fr.consistency,
+    repayment,
+  };
 }
 
-/**
- * Per-pillar sub-scores + the overall score.
- *
- * overall_score is a v1 FIXED weighted combination of the pillar scores (weights
- * live in pillars.ts and sum to 1); a learnable meta-model can replace this later
- * per the original plan.
- */
+/** End-to-end: bundle -> features -> calibrated pillar scores -> scorecard. */
 export function scoreMsme(
-  f: FeatureRecord,
-  models: ModelBundle = getModels(),
-): ScoreResult {
-  const pillars: PillarScore[] = PILLARS.map((p) => ({
-    name: p.label,
-    score: pillarSubScore(models.pillars[p.key], f),
-  }));
-
-  const weighted = PILLARS.reduce(
-    (acc, p, i) => acc + p.weight * pillars[i].score,
-    0,
-  );
-  const overall_score = Math.max(0, Math.min(100, Math.round(weighted)));
-
-  return { pillars, overall_score, rating_band: ratingBand(overall_score) };
+  bundle: MsmeBundle,
+  artifact: ModelArtifact = MODEL_ARTIFACT,
+): Scorecard {
+  const fr = computeFeatures(bundle);
+  const repayment = sustainableEmi(bundle.transactions);
+  return scoreFeatures(fr, repayment, artifact);
 }

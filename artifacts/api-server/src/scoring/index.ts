@@ -1,27 +1,14 @@
-import type { FeatureRecord } from "../features";
-import { PILLARS } from "./pillars";
-import { getModels } from "./train";
-import { scoreMsme } from "./score";
-import { reasonCodes } from "./explain";
-import { mapCompletenessToConfidence } from "./confidence";
-import { sustainableEmi } from "./repayment";
-import {
-  forecastScore,
-  DEFAULT_BASE_MONTH,
-  type FeatureSnapshot,
-} from "./forecast";
-
-export type { ModelBundle, PillarModel } from "./train";
-export { trainModels, getModels, saveModels } from "./train";
-export { scoreMsme, ratingBand } from "./score";
-export { reasonCodes, overallReason } from "./explain";
-export { mapCompletenessToConfidence } from "./confidence";
-export { sustainableEmi } from "./repayment";
-export { forecastScore } from "./forecast";
-export type { FeatureSnapshot, Forecast } from "./forecast";
+import type { MsmeBundle, TransactionRecord } from "../types";
+import type { FeatureKey } from "../features/catalog";
+import { scoreMsme, type Scorecard, type PillarScore } from "./score";
+import type { ReasonCode } from "./explain";
 
 /**
- * Full scorecard — this is the API contract (field names are exact).
+ * Full scorecard — this is the API contract (field names are exact, driven by
+ * lib/api-spec/openapi.yaml's CardResponse schema and the msme_score_history
+ * jsonb columns in @workspace/db). The scoring internals below (features,
+ * ml/, synthetic/, model artifact) are free to evolve; this shape may not
+ * change without updating the spec, the generated zod/client, and the schema.
  */
 export interface Card {
   msme_id: string;
@@ -34,79 +21,160 @@ export interface Card {
   forecast: { months: string[]; projected_net_surplus: number[] };
 }
 
-// Below this, a cross-source consistency ratio (~1.0 = corroborated) is treated
-// as a genuine inconsistency worth flagging.
-const CONSISTENCY_THRESHOLD = 0.5;
+// Plain-language phrase per feature, chosen by the SIGN of the contribution: a
+// positive contribution lifts the score (favorable), negative drags it (adverse).
+const PHRASES: Record<FeatureKey, { favorable: string; adverse: string }> = {
+  // Business Vitality
+  turnover6moTrend: {
+    favorable: "Rising turnover over recent months",
+    adverse: "Declining turnover in recent months",
+  },
+  turnoverCAGR: {
+    favorable: "Healthy long-run turnover growth",
+    adverse: "Weak long-run turnover growth",
+  },
+  turnoverVolatilityCV: {
+    favorable: "Steady, low-volatility turnover",
+    adverse: "Erratic month-to-month turnover",
+  },
+  invoiceCountTrend: {
+    favorable: "Growing invoice volume",
+    adverse: "Shrinking invoice volume",
+  },
+  seasonalityIndex: {
+    favorable: "Well-contained seasonal swings",
+    adverse: "Large seasonal revenue swings",
+  },
+  // Cashflow Health
+  avgMonthlyNetInflow: {
+    favorable: "Strong average monthly net inflow",
+    adverse: "Thin or negative monthly net inflow",
+  },
+  inflowVolatilityCV: {
+    favorable: "Stable, predictable cash inflows",
+    adverse: "Volatile cashflow in recent months",
+  },
+  runwayMonths: {
+    favorable: "Comfortable cash runway",
+    adverse: "Short cash runway",
+  },
+  negativeBalanceDays: {
+    favorable: "Rarely runs a negative balance",
+    adverse: "Frequent negative-balance periods",
+  },
+  dscrProxy: {
+    favorable: "Comfortably covers debt service",
+    adverse: "Tight debt-service coverage",
+  },
+  // Formalisation & Compliance
+  gstOnTimeFilingPct: {
+    favorable: "Consistent on-time GST filing",
+    adverse: "Frequent late or missed GST filings",
+  },
+  monthsFiledOverMonthsActive: {
+    favorable: "Complete GST filing history",
+    adverse: "Thin GST filing history",
+  },
+  epfoActiveFlag: {
+    favorable: "Active EPFO registration",
+    adverse: "No EPFO footprint",
+  },
+  epfoContributionConsistency: {
+    favorable: "Regular EPFO contributions",
+    adverse: "Irregular EPFO contributions",
+  },
+  // Banking Behaviour
+  bounceRate: {
+    favorable: "No recent payment bounces",
+    adverse: "Elevated payment-bounce rate",
+  },
+  avgBalanceBuffer: {
+    favorable: "Healthy average balance buffer",
+    adverse: "Low average balance buffer",
+  },
+  balanceStabilityCV: {
+    favorable: "Stable account balances",
+    adverse: "Unstable account balances",
+  },
+  minBalanceEventCount: {
+    favorable: "Few low-balance episodes",
+    adverse: "Recurrent low-balance episodes",
+  },
+  // Obligations & Leverage
+  obligationToInflowRatio: {
+    favorable: "Low obligations relative to inflows",
+    adverse: "High obligations relative to inflows",
+  },
+  obligationCount: {
+    favorable: "Few existing obligations",
+    adverse: "Multiple existing obligations",
+  },
+};
 
-function consistencyFlag(f: FeatureRecord): {
-  consistency_alert: boolean;
-  detail: string;
-} {
-  const gstBreak = f.gstToUpiRatio < CONSISTENCY_THRESHOLD;
-  const epfoBreak = f.epfoHeadcountToPayrollRatio < CONSISTENCY_THRESHOLD;
-
-  const details: string[] = [];
-  if (gstBreak) {
-    details.push(
-      "Declared GST turnover is materially higher than observed bank inflows.",
-    );
+function phraseFor(reason: ReasonCode): string {
+  const p = PHRASES[reason.feature];
+  if (!p) {
+    return reason.direction === "positive"
+      ? `Favorable ${reason.label}`
+      : `Adverse ${reason.label}`;
   }
-  if (epfoBreak) {
-    details.push(
-      "EPFO headcount implies a larger payroll than bank outflows support.",
-    );
-  }
-
-  return {
-    consistency_alert: gstBreak || epfoBreak,
-    detail: details.length
-      ? details.join(" ")
-      : "No material cross-source inconsistencies detected.",
-  };
+  return reason.direction === "positive" ? p.favorable : p.adverse;
 }
 
-/**
- * Assemble the full scorecard for one MSME from its feature record.
- *
- * `history` is the MSME's monthly net-inflow series, used only for the forward
- * projection. When it is omitted (or empty) the forecast falls back to a flat
- * projection off the current average, so the card shape is always complete.
- */
-export function assembleCard(
-  msmeId: string,
-  f: FeatureRecord,
-  history: FeatureSnapshot[] = [],
-): Card {
-  const models = getModels();
-  const scored = scoreMsme(f, models);
+function pillarToCard(p: PillarScore): Card["pillars"][number] {
+  return { name: p.label, score: p.subScore, reasons: p.reasons.map(phraseFor) };
+}
 
-  const pillars = scored.pillars.map((p, i) => ({
-    name: p.name,
-    score: p.score,
-    reasons: reasonCodes(p.name, f, models.pillars[PILLARS[i].key]),
-  }));
+const REPAYMENT_BASIS =
+  "40% of the projected worst-month net cashflow surplus (6-month linear-trend " +
+  "forecast off monthly transaction history, stressed by one historical " +
+  "standard deviation), floored at 0.";
 
-  const confidence = mapCompletenessToConfidence(f.completeness);
-  const repayment = sustainableEmi(f);
-  const flags = consistencyFlag(f);
-  const forecast = forecastScore(
-    msmeId,
-    history.length
-      ? history
-      : [{ month: DEFAULT_BASE_MONTH, avgMonthlyNetInflow: f.avgMonthlyNetInflow }],
-  );
+// Used only when there is no dated transaction history to anchor month labels to.
+const DEFAULT_BASE_MONTH = "2024-01";
+
+/** Advance a "YYYY-MM" label by `k` months. */
+function shiftMonth(month: string, k: number): string {
+  const [y, m] = month.split("-").map(Number);
+  const zero = y * 12 + (m - 1) + k;
+  const yy = Math.floor(zero / 12);
+  const mm = (zero % 12) + 1;
+  return `${yy}-${String(mm).padStart(2, "0")}`;
+}
+
+/** Forward month labels aligned to forecastCashflow's fixed-horizon projection. */
+function forecastMonths(transactions: TransactionRecord[], horizon: number): string[] {
+  const months = transactions.map((t) => t.date.slice(0, 7)).sort();
+  const lastMonth = months.length ? months[months.length - 1]! : DEFAULT_BASE_MONTH;
+  return Array.from({ length: horizon }, (_, i) => shiftMonth(lastMonth, i + 1));
+}
+
+/** Assemble the full Card for one MSME from its already-fetched bundle. */
+export function assembleCard(bundle: MsmeBundle): Card {
+  const sc: Scorecard = scoreMsme(bundle);
 
   return {
-    msme_id: msmeId,
-    overall_score: scored.overall_score,
-    rating_band: scored.rating_band,
-    pillars,
-    confidence: { level: confidence.level, raise_by: confidence.raiseBy },
-    repayment: {
-      sustainable_emi: repayment.sustainableEmi,
-      basis: repayment.basis,
+    msme_id: sc.msmeId,
+    overall_score: sc.overallScore,
+    rating_band: sc.ratingBand,
+    pillars: sc.pillars.map(pillarToCard),
+    confidence: {
+      level: sc.confidence.level,
+      raise_by:
+        sc.confidence.raiseBy ??
+        "All key inputs present — confidence is already at its maximum.",
     },
-    flags,
-    forecast,
+    repayment: {
+      sustainable_emi: sc.repayment.sustainableEmi,
+      basis: REPAYMENT_BASIS,
+    },
+    flags: {
+      consistency_alert: sc.flags.consistencyAlert,
+      detail: sc.flags.detail ?? "No material cross-source inconsistencies detected.",
+    },
+    forecast: {
+      months: forecastMonths(bundle.transactions, sc.repayment.forecast.projected.length),
+      projected_net_surplus: sc.repayment.forecast.projected,
+    },
   };
 }

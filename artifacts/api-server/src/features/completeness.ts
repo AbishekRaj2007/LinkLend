@@ -1,30 +1,58 @@
-import type { RawSourceData, CompletenessVector } from "./types";
-import { clamp } from "./util";
-
-export const SOURCE_NAMES = ["gst", "transactions", "epfo", "obligations"] as const;
+import type { MsmeBundle } from "../types";
 
 /**
- * Data completeness vector. `coverageScore` blends how many of the four sources
- * are present with how many months of history exist (capped at 12), each
- * weighted equally, into a [0, 1] score. Thin-file MSMEs (missing sources or
- * short history) score lower — this is what Gate 3 calibrates confidence against.
+ * Which data sources are present and how much history exists. Drives the
+ * confidence layer: instead of rejecting a thin file, we score it on neutral
+ * defaults and surface the gap here so the borrower gets an actionable next step.
  */
-export function computeCompleteness(raw: RawSourceData): CompletenessVector {
-  const sourcesPresent: string[] = [];
-  if (raw.gstReturns.length) sourcesPresent.push("gst");
-  if (raw.transactions.length) sourcesPresent.push("transactions");
-  if (raw.epfo.length) sourcesPresent.push("epfo");
-  if (raw.obligations.length) sourcesPresent.push("obligations");
+export interface Completeness {
+  hasGst: boolean;
+  hasTransactions: boolean;
+  hasEpfo: boolean;
+  hasObligations: boolean;
+  /** Distinct GST months available (proxy for observable history length). */
+  gstMonths: number;
+  /** Distinct transaction months available. */
+  txnMonths: number;
+  /** 0..1 — fraction of the four sources present, weighted by richness. */
+  coverageScore: number;
+}
 
-  const monthSet = new Set<string>();
-  for (const g of raw.gstReturns) monthSet.add(g.period);
-  for (const e of raw.epfo) monthSet.add(e.period);
-  for (const t of raw.transactions) monthSet.add(t.date.slice(0, 7));
-  const monthsOfHistory = monthSet.size;
+function distinctMonths(periods: string[]): number {
+  return new Set(periods).size;
+}
 
-  const sourceScore = sourcesPresent.length / SOURCE_NAMES.length;
-  const monthScore = Math.min(monthsOfHistory, 12) / 12;
-  const coverageScore = clamp(0.5 * sourceScore + 0.5 * monthScore, 0, 1);
+export function computeCompleteness(bundle: MsmeBundle): Completeness {
+  const hasGst = bundle.gst.length > 0;
+  const hasTransactions = bundle.transactions.length > 0;
+  const hasEpfo = bundle.epfo.length > 0;
+  const hasObligations = bundle.obligation !== null;
 
-  return { sourcesPresent, monthsOfHistory, coverageScore };
+  const gstMonths = distinctMonths(bundle.gst.map((g) => g.period));
+  const txnMonths = distinctMonths(
+    bundle.transactions.map((t) => t.date.slice(0, 7)),
+  );
+
+  // Presence of each source (0.6 of the score) plus a history-depth bonus
+  // (0.4), so a source that exists but is only a month or two deep still counts
+  // as thinner than a full year.
+  const present =
+    (hasGst ? 1 : 0) +
+    (hasTransactions ? 1 : 0) +
+    (hasEpfo ? 1 : 0) +
+    (hasObligations ? 1 : 0);
+  const presenceScore = (present / 4) * 0.6;
+
+  const depth = Math.min(1, Math.max(gstMonths, txnMonths) / 12);
+  const depthScore = depth * 0.4;
+
+  return {
+    hasGst,
+    hasTransactions,
+    hasEpfo,
+    hasObligations,
+    gstMonths,
+    txnMonths,
+    coverageScore: Number((presenceScore + depthScore).toFixed(4)),
+  };
 }
