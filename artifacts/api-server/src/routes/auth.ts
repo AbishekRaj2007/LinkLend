@@ -20,7 +20,7 @@ import {
   type UserRole,
 } from "../lib/tokens";
 import { requireAuth } from "../middlewares/requireAuth";
-import { getRaw } from "../data/store";
+import { loadBundle } from "../data/store";
 
 const router: IRouter = Router();
 
@@ -118,7 +118,7 @@ router.post("/auth/signup", authRateLimiter, async (req, res) => {
         .json({ message: "msme_id is required for borrower accounts" });
       return;
     }
-    if (!(await getRaw(candidateId))) {
+    if (!(await loadBundle(candidateId))) {
       res.status(400).json({ message: `Unknown MSME: ${candidateId}` });
       return;
     }

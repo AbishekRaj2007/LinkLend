@@ -23,6 +23,7 @@ import {
 import { extractErrorMessage } from "../lib/errors";
 import Sidebar, { type Page, type RecentEntry } from "./Sidebar";
 import ScoreCard, { toneForBand } from "./ScoreCard";
+import PortfolioView from "./PortfolioView";
 
 // A few valid seeded MSME IDs (dataset is MSME-000001 … MSME-002000, see
 // api-server/src/data/store.ts). These drive the "Try a sample" chips.
@@ -35,12 +36,10 @@ const PAGE_TITLE: Record<Page, string> = {
   reports: "Reports",
 };
 
-const COMING_SOON: Record<Exclude<Page, "assess">, { icon: typeof BarChart3; title: string; body: string }> = {
-  portfolio: {
-    icon: BarChart3,
-    title: "Portfolio view — Gate B",
-    body: "Score distribution and sector concentration across the full MSME book, from the live /portfolio endpoint.",
-  },
+const COMING_SOON: Record<
+  Exclude<Page, "assess" | "portfolio">,
+  { icon: typeof BarChart3; title: string; body: string }
+> = {
   approvals: {
     icon: ClipboardCheck,
     title: "Approval queue",
@@ -53,7 +52,7 @@ const COMING_SOON: Record<Exclude<Page, "assess">, { icon: typeof BarChart3; tit
   },
 };
 
-function ComingSoonPage({ page }: { page: Exclude<Page, "assess"> }) {
+function ComingSoonPage({ page }: { page: Exclude<Page, "assess" | "portfolio"> }) {
   const { icon: Icon, title, body } = COMING_SOON[page];
   return (
     <div className="h-full flex flex-col items-center justify-center gap-3 text-center text-white/40 px-6">
@@ -203,7 +202,9 @@ export default function AssessmentView({
 
         {/* Page content */}
         <div className="flex-1 min-h-0">
-          {page !== "assess" ? (
+          {page === "portfolio" ? (
+            <PortfolioView />
+          ) : page !== "assess" ? (
             <ComingSoonPage page={page} />
           ) : (
             <div className="h-full flex flex-col md:flex-row">

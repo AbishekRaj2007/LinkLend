@@ -11,7 +11,7 @@
     "test": "vitest run --passWithNoTests",
     "train": "tsx ./src/scripts/train.ts",
     "validate": "tsx ./src/scripts/validate-scores.ts",
-    "seed": "tsx ./src/scripts/generate-data.ts"
+    "seed": "tsx ./src/scripts/seed-db.ts"
   },
   "dependencies": {
     "@workspace/api-zod": "workspace:*",
