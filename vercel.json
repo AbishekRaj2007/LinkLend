@@ -1,0 +1,16 @@
+{
+  "framework": null,
+  "installCommand": "pnpm install --frozen-lockfile",
+  "buildCommand": "PORT=4174 BASE_PATH=/ pnpm --filter @workspace/sakshamscore run build",
+  "outputDirectory": "artifacts/sakshamscore/dist/public",
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://REPLACE_WITH_YOUR_API_SERVER_URL/api/:path*"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}

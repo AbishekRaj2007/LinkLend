@@ -1,6 +1,6 @@
-# [Project name]
+# LinkLend (SakshamScore)
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+Alternative credit scoring for Indian MSMEs that lack bureau history or collateral — turns their GST filings, bank transactions, EPFO payroll, and existing obligations into a lender-facing scorecard, with an AI layer that explains (never computes) the score.
 
 ## Run & Operate
 
@@ -14,7 +14,11 @@ _Replace the heading above with the project's name, and this line with one sente
 - `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
 - `pnpm --filter @workspace/api-server run train` / `run validate` — refit / evaluate the scoring models (no DB needed)
 - `pnpm --filter @workspace/api-server run seed` — seed the dev Postgres DB
-- Required env: `DATABASE_URL` — Postgres connection string
+- `pnpm run test` — run all package test suites (Vitest; `db` and `api-server` only)
+- Required env (`.env`, not committed): `DATABASE_URL` (Postgres/Supabase),
+  `JWT_ACCESS_SECRET`, `FRONTEND_ORIGIN` (defaults to `http://localhost:5173`).
+  `GROQ_API_KEY` is only needed for the AI features (credit memos, borrower coach,
+  scorecard Q&A, document ingestion) — the app runs without it, but those endpoints 500.
 
 ## Stack
 
@@ -23,27 +27,51 @@ _Replace the heading above with the project's name, and this line with one sente
 - DB: PostgreSQL + Drizzle ORM
 - Validation: Zod (`zod/v4`), `drizzle-zod`
 - API codegen: Orval (from OpenAPI spec)
+- AI layer: Groq (`groq-sdk`, OpenAI-compatible) — explains scores, never computes them
 - Build: esbuild (CJS bundle)
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- `lib/api-spec` — `openapi.yaml`, the source of truth for the API contract
+- `lib/api-zod` / `lib/api-client-react` — generated from the spec via Orval; never
+  hand-edit, run `codegen` instead
+- `lib/db` — Drizzle schema (`src/schema/index.ts`) + Postgres client/pool; no
+  migration files, changes apply via `drizzle-kit push`
+- `artifacts/api-server` — Express API: routes, scoring engine, AI features (see
+  `docs/SCORING.md` for the scoring methodology)
+- `artifacts/sakshamscore` — the product frontend (React 19 + Vite + wouter +
+  TanStack Query); lender dashboard/portfolio/assessment views and the borrower
+  scorecard view
+- `artifacts/mockup-sandbox` — standalone Vite app for previewing UI mockups; not
+  part of the deployed product
+- `scripts` — one-off scripts (e.g. `seed-db.ts`), not part of any app's runtime
 
 ## Architecture decisions
 
-- `/assess`, `/card`, `/me/scorecard`, and `/portfolio` read the real Postgres tables via `artifacts/api-server/src/data/store.ts`. The scoring core itself (features, model evaluation, reason codes, confidence, forecast) is pure, DB-independent TypeScript operating on the `MsmeBundle` domain type (`src/types.ts`); training/validation regenerate a deterministic synthetic dataset in memory (`src/synthetic/generate.ts`) rather than touching the DB. See CLAUDE.md for the full pipeline.
+- `/assess`, `/card`, `/me/scorecard`, and `/portfolio` read the real Postgres tables via `artifacts/api-server/src/data/store.ts`. The scoring core itself (features, model evaluation, reason codes, confidence, forecast) is pure, DB-independent TypeScript operating on the `MsmeBundle` domain type (`src/types.ts`); training/validation regenerate a deterministic synthetic dataset in memory (`src/synthetic/generate.ts`) rather than touching the DB. See CLAUDE.md for the full pipeline and `docs/SCORING.md` for the scoring methodology.
+- Auth is a stateless JWT access token (15 min, httpOnly cookie) + opaque refresh token (7 days, hashed, rotated on every `/auth/refresh`). `role` (`lender` | `borrower`) and `msmeId` live in the access-token payload, so `requireAuth` never hits the DB per request.
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+Lenders sign up, pull up an MSME's scorecard (`/assess`, `/card`), and browse their
+full portfolio of assessed borrowers. Each scorecard blends five pillar models into
+an overall score + rating band, plain-language reason codes, a confidence measure,
+a sustainable EMI + cashflow forecast, and a cross-source consistency flag.
+Borrowers can sign up (self-declaring their MSME) and view their own scorecard
+read-only. AI features (credit memo generation, a borrower-facing coach, scorecard
+Q&A, document ingestion) sit on top of the computed scorecard and only explain it.
 
 ## User preferences
 
-_Populate as you build — explicit user instructions worth remembering across sessions._
+- Never run git commands (add, commit, push, branch, checkout, etc.) — the developer reviews every diff and commits manually.
+- Work strictly within the scope of the gate/task given in the current prompt — don't build ahead into later gates or touch files outside the stated scope.
+- Always run the relevant typecheck and test commands before declaring a gate complete. Stop at green and summarize what changed — don't continue to the next gate unprompted.
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
+- `@workspace/api-server`'s tests hit the real dev database directly (no test-DB isolation) — `set -a && source .env && set +a` before running them, since Vitest doesn't load `.env` itself.
+- Don't add an "only run if invoked directly" (`import.meta.url === process.argv[1]`) side-effect guard to any file reachable from `features/`, `scoring/`, `data/`, or `routes/`. esbuild collapses every bundled module's `import.meta.url` to the bundle's own path, so that guard evaluates true on *every* server startup — this once caused a dev-only DB-seeding `main()` to truncate and reseed the real DB on login, and then call `pool.end()` on the pool auth routes depend on. Seeding logic now lives only in `scripts/seed-db.ts`, run directly via `tsx`.
+- Re-run `pnpm --filter @workspace/api-server run train` (and review the diff to `scoring/model-artifact.generated.ts`) if you change `features/catalog.ts` or `features/compute.ts`.
 
 ## Pointers
 
