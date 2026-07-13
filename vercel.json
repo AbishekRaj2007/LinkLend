@@ -5,10 +5,6 @@
   "outputDirectory": "artifacts/sakshamscore/dist/public",
   "rewrites": [
     {
-      "source": "/api/:path*",
-      "destination": "https://REPLACE_WITH_YOUR_API_SERVER_URL/api/:path*"
-    },
-    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

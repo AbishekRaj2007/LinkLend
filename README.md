@@ -73,6 +73,35 @@ Q&A, document ingestion) sit on top of the computed scorecard and only explain i
 - Don't add an "only run if invoked directly" (`import.meta.url === process.argv[1]`) side-effect guard to any file reachable from `features/`, `scoring/`, `data/`, or `routes/`. esbuild collapses every bundled module's `import.meta.url` to the bundle's own path, so that guard evaluates true on *every* server startup — this once caused a dev-only DB-seeding `main()` to truncate and reseed the real DB on login, and then call `pool.end()` on the pool auth routes depend on. Seeding logic now lives only in `scripts/seed-db.ts`, run directly via `tsx`.
 - Re-run `pnpm --filter @workspace/api-server run train` (and review the diff to `scoring/model-artifact.generated.ts`) if you change `features/catalog.ts` or `features/compute.ts`.
 
+## Deploying to Vercel
+
+`vercel.json` (repo root) builds only `sakshamscore` as the static site
+(`outputDirectory: artifacts/sakshamscore/dist/public`) and rewrites everything
+else to `index.html` for client-side routing. The API is served from the same
+Vercel project as a serverless function: `api/[...slug].ts` re-exports the
+Express `app` from `artifacts/api-server/src/vercel.ts` (not `src/index.ts`,
+which calls `app.listen()` — that must never run in the serverless path).
+Because filesystem routes (including this function) are matched before the
+`rewrites` array, requests to `/api/*` reach the function and everything else
+falls through to the SPA rewrite.
+
+Set these in the Vercel project's Environment Variables (not in `vercel.json`,
+since it's committed):
+
+- `DATABASE_URL` — use Supabase's **pooled** connection string (Supavisor,
+  port 6543); the `pg.Pool` in `lib/db` is a module-level singleton reused
+  across warm invocations, which is what makes it serverless-safe
+- `JWT_ACCESS_SECRET`
+- `FRONTEND_ORIGIN` — the deployed domain (e.g. `https://your-app.vercel.app`);
+  frontend and API share an origin here, so this mostly matters for CORS
+  correctness, not cross-site cookies
+- `GROQ_API_KEY` — omit only if you don't need the AI features
+
+If AI routes (credit memos, borrower coach, document ingestion) time out under
+Vercel's default serverless function duration limit, raise `maxDuration` for
+`api/[...slug].ts` via the `functions` key in `vercel.json` (limit depends on
+your Vercel plan).
+
 ## Pointers
 
 - See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details
